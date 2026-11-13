@@ -59,14 +59,15 @@ export default function LiveWorkoutPage() {
   const repsRef = useRef(0)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const repCounterRef = useRef<ReturnType<typeof createRepCounter> | null>(null)
-  if (config && !repCounterRef.current) repCounterRef.current = createRepCounter(config)
   const { detector, isLoading, error } = usePoseTracker()
 
   useEffect(() => {
     if (config) setExercise(id as ExerciseId)
   }, [config, id, setExercise])
 
-  if (!config) return null
+  useEffect(() => {
+    if (!repCounterRef.current && config) repCounterRef.current = createRepCounter(config)
+  }, [config])
 
   useEffect(() => {
     let active = true
@@ -116,7 +117,7 @@ export default function LiveWorkoutPage() {
   }, [soundOn])
 
   useEffect(() => {
-    if (!isActive || isPaused || !detector || !videoRef.current) return
+    if (!isActive || isPaused || !detector || !videoRef.current || !config) return
     const loop = (now: number) => {
       if (now - lastTimeRef.current < FRAME_INTERVAL) {
         rafRef.current = requestAnimationFrame(loop)
@@ -198,6 +199,8 @@ export default function LiveWorkoutPage() {
     } catch {}
   }
 
+  if (!config) return null
+
   if (error) {
     return (
       <div className="fixed inset-0 z-20 bg-slate-50 flex flex-col items-center justify-center px-6 text-center">
@@ -235,7 +238,7 @@ export default function LiveWorkoutPage() {
               <p className="text-xs text-slate-500 mb-4">{config.phonePlacement}</p>
               <p className="text-xs text-slate-500 mb-4">{config.distance}</p>
               <Button variant="primary" className="w-full" onClick={handleStart}>
-                I'm ready
+                I&apos;m ready
               </Button>
             </div>
           ) : (

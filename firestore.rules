@@ -1,10 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
     // Users: owners can read/write their own profile. Public fields readable by friends.
     match /users/{uid} {
-      allow read: if request.auth != null && (request.auth.uid == uid || exists(/databases/$(database)/documents/friends/$(request.auth.uid)_$(uid)));
+      allow read: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null && request.auth.uid == uid;
       allow update: if request.auth != null && request.auth.uid == uid;
       allow delete: if false;
