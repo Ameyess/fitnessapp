@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users: owners can read/write their own profile. Public fields readable by friends.
+    match /users/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || exists(/databases/$(database)/documents/friends/$(request.auth.uid)_$(uid)));
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    // Workouts: only the owning user can read/write their own logs.
+    match /workouts/{workoutId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow delete: if false;
+    }
+
+    // Friends: owners manage their own friend records.
+    match /friends/{friendId} {
+      allow read: if request.auth != null && (request.auth.uid == resource.data.userId || request.auth.uid == resource.data.friendId);
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow delete: if false;
+    }
+
+    // Friend requests: sender creates, recipient reads/updates.
+    match /friendRequests/{reqId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.to;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.from;
+      allow update: if request.auth != null && request.auth.uid == resource.data.to;
+      allow delete: if false;
+    }
+
+    // Reminder logs: server-owned, clients cannot write.
+    match /reminderLogs/{logId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // Daily stats: owner readable.
+    match /dailyStats/{statId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow write: if false;
+    }
+  }
+}

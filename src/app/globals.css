@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-nunito: "Nunito", ui-sans-serif, system-ui, sans-serif;
+    --radius-xl: 1rem;
+    --radius-2xl: 1.5rem;
+  }
+  html {
+    scroll-behavior: smooth;
+    touch-action: manipulation;
+  }
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    overflow-x: hidden;
+  }
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  .safe-area-pad-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+  .safe-area-pad-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .safe-area-pad-left {
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
+  .safe-area-pad-right {
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  .mirror {
+    transform: scaleX(-1);
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-900 shadow-sm transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-emerald-500 border-emerald-500 text-white shadow-[0_8px_0_#15803d] active:shadow-[0_2px_0_#15803d] active:translate-y-[6px];
+  }
+  .btn-flame {
+    @apply btn bg-flame-500 border-flame-500 text-white shadow-[0_8px_0_#c2410c] active:shadow-[0_2px_0_#c2410c] active:translate-y-[6px];
+  }
+  .btn-ghost {
+    @apply btn bg-transparent border-slate-300 text-slate-600 hover:bg-slate-100 shadow-none;
+  }
+  .btn-danger {
+    @apply btn bg-rose-500 border-rose-500 text-white shadow-[0_8px_0_#be123c] active:shadow-[0_2px_0_#be123c] active:translate-y-[6px];
+  }
+
+  .card {
+    @apply rounded-3xl border border-slate-200 bg-white p-6 shadow-sm;
+  }
+  .card-thick {
+    @apply card shadow-[0_12px_0_#e2e8f0];
+  }
+
+  .input {
+    @apply block w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-colors;
+  }
+
+  .label {
+    @apply block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-0.5 text-xs font-semibold text-slate-600;
+  }
+  .badge-emerald {
+    @apply badge border-emerald-200 bg-emerald-50 text-emerald-700;
+  }
+  .badge-flame {
+    @apply badge border-flame-200 bg-flame-50 text-flame-700;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

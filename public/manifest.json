@@ -1,0 +1,32 @@
+{
+  "name": "FitStreak",
+  "short_name": "FitStreak",
+  "description": "Count workout reps with your camera and keep your daily streak alive.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#22c55e",
+  "id": "/",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health-fitness", "lifestyle"],
+  "shortcuts": [
+    {
+      "name": "Home",
+      "url": "/home",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "History",
+      "url": "/history",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}
