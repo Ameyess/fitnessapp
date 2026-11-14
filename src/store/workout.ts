@@ -25,6 +25,8 @@ interface WorkoutState {
   reset: () => void
   complete: () => void
   setReps: (reps: number) => void
+  syncReps: (reps: number) => void
+  setSeconds: (seconds: number) => void
   addRep: () => void
   subtractRep: () => void
   tick: (now: number) => void
@@ -97,21 +99,25 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
 
   setReps: (reps) => set({ reps, manualReps: reps }),
 
+  /** Sync the counter to the authoritative value from the rep state machine
+   *  (never drifts by one like an incrementing counter would). */
+  syncReps: (reps) => set({ reps }),
+
+  /** Set the elapsed seconds (hold time for timed exercises). */
+  setSeconds: (seconds) => set({ seconds }),
+
   addRep: () => set((s) => ({ reps: s.reps + 1, manualReps: s.reps + 1 })),
 
   subtractRep: () =>
     set((s) => ({ reps: Math.max(0, s.reps - 1), manualReps: Math.max(0, s.reps - 1) })),
 
   tick: (now) => {
-    const { isActive, isPaused, startTime, holdStart, config, seconds } = get()
+    const { isActive, isPaused, startTime, config } = get()
     if (!isActive || isPaused || !startTime) return
-    let newSeconds = seconds
-    if (config?.type === "timed" && holdStart) {
-      newSeconds = Math.floor((now - holdStart) / 1000)
-    } else {
-      newSeconds = Math.floor((now - startTime) / 1000)
-    }
-    set({ seconds: newSeconds })
+    // For timed exercises the elapsed time is the real HOLD time, which is
+    // driven by the rep counter (it knows when the position was valid).
+    if (config?.type === "timed") return
+    set({ seconds: Math.floor((now - startTime) / 1000) })
   },
 
   setFrame: (inFrame, angle, phase) =>

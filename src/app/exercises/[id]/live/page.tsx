@@ -44,6 +44,8 @@ export default function LiveWorkoutPage() {
   const complete = useWorkoutStore((s) => s.complete)
   const addRep = useWorkoutStore((s) => s.addRep)
   const subtractRep = useWorkoutStore((s) => s.subtractRep)
+  const syncReps = useWorkoutStore((s) => s.syncReps)
+  const setSeconds = useWorkoutStore((s) => s.setSeconds)
   const tick = useWorkoutStore((s) => s.tick)
   const setFrame = useWorkoutStore((s) => s.setFrame)
   const profile = useProfileStore((s) => s.profile)
@@ -54,6 +56,7 @@ export default function LiveWorkoutPage() {
   const [soundOn, setSoundOn] = useState(true)
   const [hapticsOn, setHapticsOn] = useState(true)
   const [showGuide, setShowGuide] = useState(true)
+  const [showControls, setShowControls] = useState(true)
   const [landmarks, setLandmarks] = useState<any[] | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -62,6 +65,7 @@ export default function LiveWorkoutPage() {
   const lastTimeRef = useRef<number>(0)
   const lastRepRef = useRef<number>(0)
   const repsRef = useRef(0)
+  const lastCountedReps = useRef(0)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const repCounterRef = useRef<ReturnType<typeof createRepCounter> | null>(null)
   const { detector, status: modelStatus, error: modelError } = usePoseTracker()
@@ -214,10 +218,22 @@ export default function LiveWorkoutPage() {
       const state = repCounterRef.current.update({ config, landmarks: lm, now })
       setFrame(state.inFrame, state.angle, state.phase)
 
-      if (state.inFrame && state.reps > repsRef.current && now - lastRepRef.current > 700) {
-        lastRepRef.current = now
+      // Always mirror the authoritative rep count - never increment locally,
+      // which would lag by one rep at fast cadence.
+      if (state.reps !== repsRef.current) {
         repsRef.current = state.reps
-        addRep()
+        syncReps(state.reps)
+      }
+
+      // Timed exercises measure REAL hold time, not wall-clock time.
+      if (config.type === "timed") {
+        const holdMs = state.holdStart ? now - state.holdStart : 0
+        setSeconds(Math.floor(holdMs / 1000))
+      }
+
+      if (state.inFrame && state.reps > lastCountedReps.current && now - lastRepRef.current > 350) {
+        lastRepRef.current = now
+        lastCountedReps.current = state.reps
         beep()
         if (hapticsOn) navigator.vibrate?.(80)
         add({ type: "success", title: "Nice one!", description: `Rep ${state.reps}` })
@@ -235,10 +251,18 @@ export default function LiveWorkoutPage() {
     return () => clearInterval(t)
   }, [isActive, isPaused, tick])
 
+  // Auto-hide the controls so your body is never covered mid-workout.
+  useEffect(() => {
+    if (!isActive || showGuide || !showControls) return
+    const t = setTimeout(() => setShowControls(false), 4000)
+    return () => clearTimeout(t)
+  }, [isActive, showGuide, showControls, reps, seconds])
+
   const handleStart = async () => {
     await requestWakeLock()
     start()
     setShowGuide(false)
+    setShowControls(true)
   }
 
   const handlePause = () => {
@@ -489,60 +513,67 @@ export default function LiveWorkoutPage() {
           )}
         </div>
 
-        {/* Bottom controls */}
+        {/* Bottom controls - one compact row that auto-hides so your body
+            is never covered. Tap anywhere to bring them back. */}
         {!showGuide && (
-          <div className="pointer-events-auto flex flex-col items-center gap-3">
-            {!inFrame && (
-              <div
-                className="flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-extrabold"
-                style={{
-                  backgroundColor: "rgba(255,150,0,0.95)",
-                  borderColor: "transparent",
-                  color: "#ffffff",
-                }}
-              >
-                <span aria-hidden>⚠️</span> Get in frame
-              </div>
-            )}
+          <>
+            <motion.button
+              aria-label="Show controls"
+              onClick={() => setShowControls(true)}
+              className="pointer-events-auto absolute inset-0 cursor-default"
+              animate={{ opacity: showControls ? 0 : 1 }}
+              style={{ pointerEvents: showControls ? "none" : "auto" }}
+            />
+            <motion.div
+              initial={false}
+              animate={{ opacity: showControls ? 1 : 0, y: showControls ? 0 : 24 }}
+              transition={{ duration: 0.22 }}
+              className="pointer-events-auto flex items-center justify-center gap-2"
+              style={{ pointerEvents: showControls ? "auto" : "none" }}
+            >
+              {!inFrame && (
+                <div
+                  className="flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-extrabold"
+                  style={{
+                    backgroundColor: "rgba(138,74,0,0.95)",
+                    color: "#ffffff",
+                  }}
+                >
+                  <span aria-hidden>⚠️</span> Get in frame
+                </div>
+              )}
 
-            {/* Manual rep correction */}
-            <div className="flex items-center gap-2">
+              {/* Manual rep correction */}
               <button
                 onClick={subtractRep}
                 aria-label="Remove a rep"
-                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/55 backdrop-blur active:scale-90"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-black/55 backdrop-blur active:scale-90"
               >
                 <Minus className="h-5 w-5 text-white" />
               </button>
-              <span className="rounded-full bg-black/55 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-white/80 backdrop-blur">
-                Fix count
-              </span>
               <button
                 onClick={addRep}
                 aria-label="Add a rep"
-                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/55 backdrop-blur active:scale-90"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-black/55 backdrop-blur active:scale-90"
               >
                 <Plus className="h-5 w-5 text-white" />
               </button>
-            </div>
-
-            <div className="flex items-center gap-3">
               <button
                 onClick={handlePause}
                 aria-label={isPaused ? "Resume" : "Pause"}
-                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/55 backdrop-blur active:scale-90"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-black/55 backdrop-blur active:scale-90"
               >
                 {isPaused ? (
-                  <Play className="h-6 w-6 text-white" />
+                  <Play className="h-5 w-5 text-white" />
                 ) : (
-                  <Pause className="h-6 w-6 text-white" />
+                  <Pause className="h-5 w-5 text-white" />
                 )}
               </button>
-              <Button variant="danger" onClick={handleFinish}>
+              <Button variant="danger" onClick={handleFinish} className="px-5 py-2.5">
                 Finish
               </Button>
-            </div>
-          </div>
+            </motion.div>
+          </>
         )}
       </div>
     </div>

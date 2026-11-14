@@ -29,6 +29,14 @@ export interface ExerciseConfig {
    *    - the joint FOLDS when you sit up).
    */
   angleDirection?: "increasing" | "decreasing"
+  /**
+   * Which angle to measure.
+   *  - "interior" (default): the interior joint angle, e.g. elbow for pushups.
+   *  - "torsoElevation": how far the torso is raised off the floor, measured
+   *    relative to horizontal. Stable regardless of leg position, so it is
+   *    used for situps and crunches.
+   */
+  angleSource?: "interior" | "torsoElevation"
   repCompletedOn: "up-to-down" | "down-to-up"
   targetSeconds?: number
   setupText: string

@@ -22,6 +22,17 @@ export function distance(p: AnglePoint, q: AnglePoint): number {
   return Math.hypot(p.x - q.x, p.y - q.y)
 }
 
+/**
+ * Angle of the a->b segment relative to horizontal, in degrees (0-90).
+ *
+ * Used for floor exercises (situps, crunches): the torso pivots up from the
+ * floor, so "elevation" is far more stable than the interior hip angle,
+ * which changes with the position of the knees.
+ */
+export function elevationDeg(a: AnglePoint, b: AnglePoint): number {
+  return (Math.atan2(Math.abs(a.y - b.y), Math.abs(a.x - b.x)) * 180) / Math.PI
+}
+
 export function landmarksVisible(
   landmarks: Landmark[],
   indices: number[],

@@ -1,5 +1,5 @@
 import type { ExerciseConfig, RepPhase } from "@/types"
-import { angleABC, getLandmark, landmarksVisible } from "@/lib/mediapipe"
+import { angleABC, elevationDeg, getLandmark, landmarksVisible } from "@/lib/mediapipe"
 
 export interface RepCounterState {
   reps: number
@@ -7,6 +7,9 @@ export interface RepCounterState {
   angle: number | null
   inFrame: boolean
   lastRepTime: number
+  /** For timed exercises: when the current unbroken hold started (ms).
+   *  null when not currently holding a valid position. */
+  holdStart: number | null
 }
 
 export interface RepCounterInput {
@@ -24,6 +27,7 @@ export function createRepCounter(config: ExerciseConfig) {
     angle: null,
     inFrame: false,
     lastRepTime: -Infinity,
+    holdStart: null,
   }
 
   // For timed exercises, track hold start
@@ -39,7 +43,13 @@ export function createRepCounter(config: ExerciseConfig) {
         landmarks && landmarksVisible(landmarks, required, minConf)
 
       if (!visible) {
-        state = { ...state, inFrame: false, angle: null, phase: "resting" }
+        state = {
+          ...state,
+          inFrame: false,
+          angle: null,
+          phase: "resting",
+          holdStart: null,
+        }
         holdStart = null
         return state
       }
@@ -61,12 +71,17 @@ export function createRepCounter(config: ExerciseConfig) {
         const avgAngle = (leftAngle + rightAngle) / 2
 
         const aligned = avgAngle >= config.downThreshold! && avgAngle <= config.upThreshold!
-        state = { ...state, angle: avgAngle, phase: aligned ? "holding" : "resting" }
 
         if (aligned) {
           if (!holdStart) holdStart = now
         } else {
           holdStart = null
+        }
+        state = {
+          ...state,
+          angle: avgAngle,
+          phase: aligned ? "holding" : "resting",
+          holdStart,
         }
         return state
       }
@@ -85,6 +100,17 @@ export function createRepCounter(config: ExerciseConfig) {
         const a = angleABC(getLandmark(lm, 23)!, getLandmark(lm, 25)!, getLandmark(lm, 27)!)
         const b = angleABC(getLandmark(lm, 24)!, getLandmark(lm, 26)!, getLandmark(lm, 28)!)
         angle = (a + b) / 2
+      } else if (config.angleSource === "torsoElevation") {
+        // Situps / crunches: how far the torso is raised off the floor.
+        // Measured relative to horizontal so it is independent of where the
+        // knees are (the interior hip angle shifts with leg position).
+        const ls = getLandmark(lm, 11)
+        const rs = getLandmark(lm, 12)
+        const lh = getLandmark(lm, 23)
+        const rh = getLandmark(lm, 24)
+        const e1 = ls && lh ? elevationDeg(ls, lh) : 0
+        const e2 = rs && rh ? elevationDeg(rs, rh) : 0
+        angle = (e1 + e2) / 2
       } else if (config.id === "situps" || config.id === "crunches") {
         // Hip angle (shoulder-hip-knee), average left/right
         const a = angleABC(getLandmark(lm, 11)!, getLandmark(lm, 23)!, getLandmark(lm, 25)!)
@@ -153,6 +179,7 @@ export function createRepCounter(config: ExerciseConfig) {
         angle: null,
         inFrame: false,
         lastRepTime: -Infinity,
+        holdStart: null,
       }
       holdStart = null
     },

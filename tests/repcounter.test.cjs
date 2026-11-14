@@ -115,6 +115,40 @@ function plankLandmarks(aligned) {
   return lm
 }
 
+/**
+ * Realistic floor-exercise geometry: the torso is raised `elev` degrees off
+ * the floor. `kneeX` moves the knees around to prove the measurement is
+ * independent of leg position (the old hip-interior-angle approach was not).
+ */
+function torsoLandmarks(elev, kneeX = 0.78) {
+  const hip = { x: 0.55, y: 0.62 }
+  const rad = (elev * Math.PI) / 180
+  // shoulder is `len` away from the hip, raised `elev` degrees from horizontal
+  const len = 0.3
+  const shoulder = {
+    x: hip.x - len * Math.cos(rad),
+    y: hip.y - len * Math.sin(rad),
+  }
+  const knee = { x: kneeX, y: 0.72 }
+
+  const lm = new Array(33).fill(null).map(() => ({
+    x: 0.5,
+    y: 0.5,
+    z: 0,
+    visibility: 1,
+  }))
+  const set = (i, p) => {
+    lm[i] = { x: p.x, y: p.y, z: 0, visibility: 1 }
+  }
+  set(11, shoulder)
+  set(23, hip)
+  set(25, knee)
+  set(12, { x: 1 - shoulder.x, y: shoulder.y })
+  set(24, { x: 1 - hip.x, y: hip.y })
+  set(26, { x: 1 - knee.x, y: knee.y })
+  return lm
+}
+
 /* ---------------- test runner ---------------- */
 async function load() {
   await esbuild.build({
@@ -232,40 +266,101 @@ async function main() {
     )
   }
 
-  /* ---- 4. situps: up-to-down (angle DEcreases when sitting up) ---- */
+  /* ---- 4. situps: up-to-down (torso elevation) ---- */
   {
     const cfg = exerciseRegistry.situps
     const c = createRepCounter(cfg)
     let t = 1000
-    c.update({ config: cfg, landmarks: situpLandmarks(170), now: t }) // lying
+    c.update({ config: cfg, landmarks: torsoLandmarks(5), now: t }) // lying
     check("situps: lying down is the start phase", c.getState().phase === "down", c.getState().phase)
     t += 500
-    c.update({ config: cfg, landmarks: situpLandmarks(60), now: t }) // sat up
+    c.update({ config: cfg, landmarks: torsoLandmarks(75), now: t }) // sat up
     check("situps: sitting up registers as 'up'", c.getState().phase === "up", c.getState().phase)
     check("situps: sitting up does not count yet", c.getState().reps === 0, `reps=${c.getState().reps}`)
     t += 500
-    c.update({ config: cfg, landmarks: situpLandmarks(170), now: t }) // back down
+    c.update({ config: cfg, landmarks: torsoLandmarks(5), now: t }) // back down
     check("situps: lying back down counts 1 rep", c.getState().reps === 1, `reps=${c.getState().reps}`)
     t += 500
-    c.update({ config: cfg, landmarks: situpLandmarks(60), now: t })
+    c.update({ config: cfg, landmarks: torsoLandmarks(75), now: t })
     t += 500
-    c.update({ config: cfg, landmarks: situpLandmarks(170), now: t })
+    c.update({ config: cfg, landmarks: torsoLandmarks(5), now: t })
     check("situps: second cycle counts 2 reps", c.getState().reps === 2, `reps=${c.getState().reps}`)
   }
 
-  /* ---- 4b. crunches use the same inverted semantics ---- */
+  /* ---- 4b. crunches ---- */
   {
     const cfg = exerciseRegistry.crunches
     const c = createRepCounter(cfg)
     let t = 1000
-    c.update({ config: cfg, landmarks: situpLandmarks(170), now: t })
+    c.update({ config: cfg, landmarks: torsoLandmarks(5), now: t })
     check("crunches: lying down is the start phase", c.getState().phase === "down", c.getState().phase)
     t += 500
-    c.update({ config: cfg, landmarks: situpLandmarks(90), now: t })
+    c.update({ config: cfg, landmarks: torsoLandmarks(40), now: t })
     check("crunches: crunching up registers as 'up'", c.getState().phase === "up", c.getState().phase)
     t += 500
-    c.update({ config: cfg, landmarks: situpLandmarks(170), now: t })
+    c.update({ config: cfg, landmarks: torsoLandmarks(5), now: t })
     check("crunches: lying back down counts 1 rep", c.getState().reps === 1, `reps=${c.getState().reps}`)
+  }
+
+  /* ---- 4c. REALISTIC floor geometry (torso elevation off the floor).
+         The old interior-hip-angle approach failed here because the hip
+         angle shifts with the position of the knees. ---- */
+  for (const [name, cfgName, downElev, upElev] of [
+    ["situps", "situps", 5, 75],
+    ["crunches", "crunches", 5, 40],
+  ]) {
+    const cfg = exerciseRegistry[cfgName]
+    for (const kneeX of [0.78, 0.62, 0.9]) {
+      const c = createRepCounter(cfg)
+      let t = 1000
+      c.update({ config: cfg, landmarks: torsoLandmarks(downElev, kneeX), now: t })
+      const downPhase = c.getState().phase
+      t += 500
+      c.update({ config: cfg, landmarks: torsoLandmarks(upElev, kneeX), now: t })
+      const upPhase = c.getState().phase
+      t += 500
+      c.update({ config: cfg, landmarks: torsoLandmarks(downElev, kneeX), now: t })
+      check(
+        `${name}: counts a rep with knees at x=${kneeX} (realistic geometry)`,
+        c.getState().reps === 1 && downPhase === "down" && upPhase === "up",
+        `phases=${downPhase}/${upPhase} reps=${c.getState().reps}`
+      )
+    }
+  }
+
+  /* ---- 4d. leg position must not change the measurement ---- */
+  {
+    const cfg = exerciseRegistry.situps
+    const a = createRepCounter(cfg)
+    const b = createRepCounter(cfg)
+    let t = 1000
+    a.update({ config: cfg, landmarks: torsoLandmarks(70, 0.78), now: t })
+    b.update({ config: cfg, landmarks: torsoLandmarks(70, 0.62), now: t })
+    check(
+      "situps: measured angle is independent of knee position",
+      Math.abs((a.getState().angle ?? 0) - (b.getState().angle ?? 0)) < 0.001,
+      `${a.getState().angle} vs ${b.getState().angle}`
+    )
+  }
+
+  /* ---- 6b. plank: hold time must be real hold time ---- */
+  {
+    const cfg = exerciseRegistry.planks
+    const c = createRepCounter(cfg)
+    let t = 1000
+    c.update({ config: cfg, landmarks: plankLandmarks(true), now: t })
+    check("plank: holdStart is set when aligned", c.getState().holdStart === t, `holdStart=${c.getState().holdStart}`)
+    t += 3000
+    c.update({ config: cfg, landmarks: plankLandmarks(true), now: t })
+    check("plank: holdStart is preserved while holding", c.getState().holdStart === 1000, `holdStart=${c.getState().holdStart}`)
+    // break the position - the hold must reset
+    t += 1000
+    c.update({ config: cfg, landmarks: plankLandmarks(false), now: t })
+    check("plank: holdStart resets when the position breaks", c.getState().holdStart === null, `holdStart=${c.getState().holdStart}`)
+    // resume holding
+    t += 1000
+    c.update({ config: cfg, landmarks: plankLandmarks(true), now: t })
+    check("plank: a new hold starts from now", c.getState().holdStart === t, `holdStart=${c.getState().holdStart}`)
   }
 
   /* ---- 5. out of frame pauses counting ---- */

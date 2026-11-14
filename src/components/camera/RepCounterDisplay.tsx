@@ -54,11 +54,13 @@ export function RepCounterDisplay({
       style={
         inFrame
           ? {
-              backgroundColor: onDark ? "rgba(88,204,2,0.95)" : "var(--c-primary-soft)",
+              // Dark green background keeps white text at ~6.5:1 contrast
+              backgroundColor: onDark ? "rgba(47,107,0,0.95)" : "var(--c-primary-soft)",
               color: onDark ? "#ffffff" : "var(--c-primary-text)",
             }
           : {
-              backgroundColor: onDark ? "rgba(255,150,0,0.95)" : "var(--c-flame-soft)",
+              // Dark orange background keeps white text at ~6.2:1 contrast
+              backgroundColor: onDark ? "rgba(138,74,0,0.95)" : "var(--c-flame-soft)",
               color: onDark ? "#ffffff" : "var(--c-flame-text)",
             }
       }
