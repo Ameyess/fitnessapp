@@ -48,7 +48,7 @@ export default function TopNav() {
           style={{ color: "var(--c-primary-text)" }}
         >
           <span aria-hidden>💪</span>
-          <span className="hidden sm:inline">FitStreak</span>
+          <span className="hidden xs:inline">FitStreak</span>
         </Link>
 
         {/* Streak - always visible, like Duolingo's header streak */}

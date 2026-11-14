@@ -7,6 +7,10 @@ module.exports = {
   ],
   theme: {
     extend: {
+      screens: {
+        // Extra breakpoint: the header can show the wordmark from here up.
+        xs: "390px",
+      },
       fontFamily: {
         sans: ["var(--font-nunito)", "ui-sans-serif", "system-ui", "sans-serif"],
       },

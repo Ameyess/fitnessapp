@@ -106,7 +106,7 @@ function record(name, pass, detail) {
   }
 
   /* ---------- narrow viewports (header must never overflow) ---------- */
-  for (const width of [360, 320]) {
+  for (const width of [414, 390, 360, 320]) {
     await page.setViewportSize({ width, height: 740 })
     await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" })
     await page.waitForTimeout(900)

@@ -36,6 +36,8 @@ interface ProgressRingProps {
   max: number
   size?: number
   color?: "primary" | "flame" | "blue"
+  /** Colour of the empty track behind the progress arc. */
+  track?: string
   children?: React.ReactNode
 }
 
@@ -44,6 +46,7 @@ export function ProgressRing({
   max,
   size = 120,
   color = "primary",
+  track = "var(--c-border)",
   children,
 }: ProgressRingProps) {
   const pct = Math.min(100, Math.max(0, max > 0 ? (value / max) * 100 : 0))
@@ -63,7 +66,7 @@ export function ProgressRing({
           cy={size / 2}
           r={r}
           fill="none"
-          stroke="var(--c-border)"
+          stroke={track}
           strokeWidth="10"
         />
         <circle
