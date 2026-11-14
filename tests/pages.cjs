@@ -40,6 +40,49 @@ function record(name, pass, detail) {
   })
   const page = await context.newPage()
 
+  /* ---------- signed-out experience (fresh, unauthenticated context) ---------- */
+  {
+    const anon = await browser.newContext({
+      viewport: { width: 414, height: 896 },
+      deviceScaleFactor: 2,
+      isMobile: true,
+      hasTouch: true,
+    })
+    const ap = await anon.newPage()
+    for (const p of ["/", "/sign-in"]) {
+      const t0 = Date.now()
+      await ap.goto(`${BASE}${p}`, { waitUntil: "domcontentloaded" })
+      await ap.waitForSelector('input[type="email"]', { timeout: 20000 })
+      const ms = Date.now() - t0
+      const info = await ap.evaluate(() => ({
+        hasHeader: !!document.querySelector("header"),
+        hasStreak: !!document.querySelector('a[aria-label^="Current streak"]'),
+        overflow:
+          document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      }))
+      record(
+        `signed out: ${p} shows the sign-in form`,
+        true,
+        `${ms}ms`
+      )
+      record(
+        `signed out: ${p} has no app header or streak`,
+        !info.hasHeader && !info.hasStreak,
+        JSON.stringify(info)
+      )
+      record(
+        `signed out: ${p} has no horizontal overflow`,
+        info.overflow <= 1,
+        `overflow=${info.overflow}px`
+      )
+      await ap.screenshot({
+        path: path.join(SHOTS, `signed-out${p === "/" ? "-root" : ""}.png`),
+        fullPage: true,
+      })
+    }
+    await anon.close()
+  }
+
   // sign in
   await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" })
   await page.waitForSelector('input[type="email"]', { timeout: 20000 })
