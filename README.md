@@ -183,6 +183,31 @@ appears automatically.
 - `npm run start` — production server
 - `npm run lint` — ESLint
 - `npm run typecheck` — TypeScript check (`tsc --noEmit`)
+- `npm run test:unit` — rep-counting state-machine unit tests (no browser needed)
+- `npm run test:e2e` — Playwright: camera pipeline, login latency, theme
+- `npm run test:pages` — Playwright: every route, overflow, touch targets, narrow header
+- `npm test` — all three suites (the e2e suites expect the dev server on :3000)
+
+### Testing notes
+
+The e2e suites mock `navigator.mediaDevices.getUserMedia` with a
+`canvas.captureStream()` that plays `public/pose-test.jpg`, so the **full**
+camera pipeline (video element → MediaPipe → landmark overlay) is verified
+without a physical camera. `/dev/pose` is a diagnostic route that runs the real
+Pose Landmarker over a still photo and renders the real `<PoseCanvas>` overlay.
+
+The unit test bundles the real `src/lib/exercises/repCounter.ts` with esbuild
+and drives it with synthetic landmarks, so it tests the shipped logic rather
+than a copy.
+
+## 8. Design system
+
+Colours live in `src/app/globals.css` as CSS variables (`--c-primary`,
+`--c-text`, `--c-flame`, …) with a light and a dark set. The dark set is
+activated by a `.dark` class on `<html>`, applied before first paint by an
+inline script so there is no flash of the wrong theme. The default follows the
+OS preference (`prefers-color-scheme`) and can be overridden with
+Light / Dark / Auto in Settings.
 
 ## 8. Security notes
 

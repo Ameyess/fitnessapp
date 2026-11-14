@@ -81,6 +81,9 @@ export default function PoseTestPage() {
         style={{ aspectRatio: "3 / 4" }}
         data-testid="stage"
       >
+        {/* A plain <img> is required here: <PoseCanvas> reads the element's
+            naturalWidth/naturalHeight for the overlay mapping. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imgRef}
           src="/pose-test.jpg"
