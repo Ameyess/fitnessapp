@@ -15,26 +15,34 @@ export default function HomePage() {
   const { user } = useAuth()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [workouts, setWorkouts] = useState<Record<ExerciseId, any>>({} as any)
 
   useEffect(() => {
     if (!user) return
     let cancelled = false
     const load = async () => {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-      const existing = await getUserProfile(user.uid)
-      if (!existing) {
-        const created = await createUserProfile(user.uid, user.email, user.displayName)
-        setProfile(created)
-      } else {
-        setProfile(existing)
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+        const existing = await getUserProfile(user.uid)
+        if (!existing) {
+          const created = await createUserProfile(user.uid, user.email, user.displayName)
+          if (cancelled) return
+          setProfile(created)
+        } else {
+          setProfile(existing)
+        }
+        const date = todayKey((existing?.timezone ?? tz))
+        const logs = await getWorkouts(user.uid, date)
+        const byExercise: Record<ExerciseId, any> = {} as any
+        logs.forEach((l) => { byExercise[l.exerciseId] = l })
+        setWorkouts(byExercise)
+      } catch (e: any) {
+        console.error("Failed to load profile", e)
+        if (!cancelled) setError(e?.message ?? "Failed to load your profile")
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-      const date = todayKey((existing?.timezone ?? tz))
-      const logs = await getWorkouts(user.uid, date)
-      const byExercise: Record<ExerciseId, any> = {} as any
-      logs.forEach((l) => { byExercise[l.exerciseId] = l })
-      setWorkouts(byExercise)
-      if (!cancelled) setLoading(false)
     }
     load()
     return () => { cancelled = true }
@@ -47,7 +55,30 @@ export default function HomePage() {
       </div>
     )
   }
-  if (!profile) return null
+
+  if (error) {
+    return (
+      <div className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-center bg-slate-50 px-6 text-center">
+        <h2 className="text-xl font-bold text-slate-900 mb-2">Could not load your profile</h2>
+        <p className="text-slate-500 mb-4 text-sm">{error}</p>
+        <Button variant="primary" onClick={() => window.location.reload()}>
+          Try again
+        </Button>
+      </div>
+    )
+  }
+
+  if (!profile) {
+    return (
+      <div className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-center bg-slate-50 px-6 text-center">
+        <h2 className="text-xl font-bold text-slate-900 mb-2">No profile yet</h2>
+        <p className="text-slate-500 mb-4 text-sm">Set up your daily goals to start your streak.</p>
+        <Link href="/onboarding">
+          <Button variant="primary">Start onboarding</Button>
+        </Link>
+      </div>
+    )
+  }
 
   const date = todayKey(profile.timezone)
   const allDone = Object.values(workouts).every((w) => w.completed)

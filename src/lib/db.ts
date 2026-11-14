@@ -41,8 +41,8 @@ export async function createUserProfile(uid: string, email?: string | null, disp
   if (snap.exists()) return snap.data() as UserProfile
   const profile: UserProfile = {
     uid,
-    email,
-    displayName,
+    email: email ?? null,
+    displayName: displayName ?? null,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     locale: "en",
     goals: {
@@ -57,7 +57,6 @@ export async function createUserProfile(uid: string, email?: string | null, disp
     restDays: [],
     streak: 0,
     longestStreak: 0,
-    lastActiveDate: undefined,
     milestones: [],
     soundEnabled: true,
     hapticsEnabled: true,

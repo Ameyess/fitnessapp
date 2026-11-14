@@ -37,7 +37,7 @@ export default function SettingsPage() {
     await setUserProfile(user.uid, {
       darkMode,
       reminderEnabled,
-      reminderTime: reminderEnabled ? reminderTime : undefined,
+      reminderTime: reminderEnabled ? reminderTime : "",
     })
     setLoading(true)
     setTimeout(() => setLoading(false), 600)
