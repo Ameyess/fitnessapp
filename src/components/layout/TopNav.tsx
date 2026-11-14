@@ -41,7 +41,7 @@ export default function TopNav() {
         <Link
           href="/"
           aria-label="FitStreak home"
-          className="flex shrink-0 items-center gap-1.5 text-xl font-black tracking-tight"
+          className="tap-target flex shrink-0 items-center gap-1.5 text-xl font-black tracking-tight"
           style={{ color: "var(--c-primary)" }}
         >
           <span aria-hidden>💪</span>
@@ -52,7 +52,7 @@ export default function TopNav() {
         <Link
           href="/"
           aria-label={`Current streak: ${streak} day${streak === 1 ? "" : "s"}`}
-          className="flex shrink-0 items-center gap-1 rounded-full border-2 px-3 py-1.5 font-extrabold transition-transform active:scale-95"
+          className="tap-target flex shrink-0 items-center gap-1 rounded-full border-2 px-3 font-extrabold transition-transform active:scale-95"
           style={{
             borderColor: "var(--c-flame)",
             backgroundColor: "var(--c-flame-soft)",

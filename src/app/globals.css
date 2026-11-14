@@ -77,6 +77,10 @@
   ::selection {
     background: var(--c-primary-soft);
   }
+  /* Minimum touch target (WCAG 2.5.8 / brief: >= 48px) */
+  button {
+    min-height: 44px;
+  }
   /* Keep the scrollbar from repainting the page on theme flip */
   html {
     color-scheme: light;
@@ -87,6 +91,13 @@
 }
 
 @layer utilities {
+  .tap-target {
+    display: inline-flex;
+    min-height: 44px;
+    min-width: 44px;
+    align-items: center;
+    justify-content: center;
+  }
   .safe-area-pad-top {
     padding-top: max(0.75rem, env(safe-area-inset-top));
   }

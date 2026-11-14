@@ -231,7 +231,7 @@ function FilterChip({
   return (
     <button
       onClick={onClick}
-      className="shrink-0 rounded-full border-2 px-3.5 py-1.5 text-xs font-extrabold capitalize transition-colors active:scale-95"
+      className="tap-target shrink-0 rounded-full border-2 px-3.5 text-xs font-extrabold capitalize transition-colors active:scale-95"
       style={{
         backgroundColor: active ? "var(--c-primary)" : "var(--c-surface)",
         borderColor: active ? "transparent" : "var(--c-border)",

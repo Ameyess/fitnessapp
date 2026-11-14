@@ -104,7 +104,7 @@ export default function FriendsPage() {
         </div>
         <button
           onClick={copyInvite}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border-2 py-2.5 text-xs font-extrabold"
+          className="tap-target mt-3 w-full justify-center gap-2 rounded-2xl border-2 text-xs font-extrabold"
           style={{ borderColor: "var(--c-border)", color: "var(--c-muted)" }}
         >
           <Copy className="h-3.5 w-3.5" /> Copy invite link
@@ -144,7 +144,7 @@ export default function FriendsPage() {
                   <button
                     onClick={() => acceptFriendRequest(r.id, r.from, r.from)}
                     aria-label="Accept"
-                    className="flex h-10 w-10 items-center justify-center rounded-xl active:scale-90"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl active:scale-90"
                     style={{ backgroundColor: "var(--c-primary)", color: "#fff" }}
                   >
                     <Check className="h-5 w-5" />
@@ -152,7 +152,7 @@ export default function FriendsPage() {
                   <button
                     onClick={() => declineFriendRequest(r.id)}
                     aria-label="Decline"
-                    className="flex h-10 w-10 items-center justify-center rounded-xl active:scale-90"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl active:scale-90"
                     style={{ backgroundColor: "var(--c-surface-2)", color: "var(--c-danger)" }}
                   >
                     <X className="h-5 w-5" />

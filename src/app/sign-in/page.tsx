@@ -149,17 +149,17 @@ export default function SignInPage() {
             </Button>
           </form>
 
-          <div className="mt-4 flex items-center justify-between text-sm">
+          <div className="mt-4 flex items-center justify-between gap-2 text-sm">
             <button
               onClick={() => setMode(mode === "login" ? "signup" : "login")}
-              className="font-extrabold"
+              className="tap-target font-extrabold"
               style={{ color: "var(--c-primary)" }}
             >
               {mode === "login" ? "Sign up" : "Sign in"}
             </button>
             <button
               onClick={handleReset}
-              className="font-bold"
+              className="tap-target font-bold"
               style={{ color: "var(--c-muted)" }}
             >
               Forgot password?

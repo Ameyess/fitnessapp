@@ -91,7 +91,7 @@ export default function SettingsPage() {
             <button
               key={t}
               onClick={() => setTheme(t)}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl border-2 py-2.5 text-xs font-extrabold capitalize transition-colors active:scale-95"
+              className="tap-target flex flex-1 items-center justify-center gap-1.5 rounded-2xl border-2 text-xs font-extrabold capitalize transition-colors active:scale-95"
               style={{
                 backgroundColor: theme === t ? "var(--c-primary)" : "var(--c-surface-2)",
                 borderColor: theme === t ? "transparent" : "var(--c-border)",
@@ -116,13 +116,20 @@ export default function SettingsPage() {
           <button
             onClick={() => setReminderEnabled(!reminderEnabled)}
             aria-label="Toggle reminders"
-            className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
-            style={{ backgroundColor: reminderEnabled ? "var(--c-primary)" : "var(--c-border)" }}
+            aria-pressed={reminderEnabled}
+            className="tap-target w-16 shrink-0 justify-center"
           >
             <span
-              className="absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all"
-              style={{ left: reminderEnabled ? 26 : 4 }}
-            />
+              className="relative block h-7 w-12 rounded-full transition-colors"
+              style={{
+                backgroundColor: reminderEnabled ? "var(--c-primary)" : "var(--c-border)",
+              }}
+            >
+              <span
+                className="absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all"
+                style={{ left: reminderEnabled ? 26 : 4 }}
+              />
+            </span>
           </button>
         </div>
         {reminderEnabled && (

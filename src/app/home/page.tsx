@@ -91,8 +91,8 @@ export default function HomePage() {
           }}
         >
           <div className="flex items-center gap-4 p-5">
-            <ProgressRing value={doneGoals.length} max={activeGoals.length || 1} size={92} color="flame">
-              <span className="text-2xl leading-none">🔥</span>
+            <ProgressRing value={doneGoals.length} max={activeGoals.length || 1} size={104} color="flame">
+              <span className="text-xl leading-none">🔥</span>
               <span
                 className="text-2xl font-black tabular-nums leading-none"
                 style={{ color: "var(--c-text)" }}
