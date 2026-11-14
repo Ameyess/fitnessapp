@@ -43,6 +43,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://firestore.googleapis.com" />
         <link rel="preconnect" href="https://www.googleapis.com" />
         <link rel="dns-prefetch" href="https://firebaseinstallations.googleapis.com" />
+        {/* Warm up the pose model + wasm so the first rep is not delayed */}
+        <link
+          rel="prefetch"
+          href="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
+        />
+        <link
+          rel="prefetch"
+          href="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm/vision_wasm_internal.js"
+        />
       </head>
       <body
         className={`${nunito.variable} min-h-screen font-sans`}

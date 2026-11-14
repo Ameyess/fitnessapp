@@ -10,6 +10,7 @@ export const baseExercise = (overrides: Partial<ExerciseConfig>): ExerciseConfig
   mirrorFrontCamera: true,
   downThreshold: 100,
   upThreshold: 160,
+  angleDirection: "increasing",
   repCompletedOn: "down-to-up",
   minConfidence: 0.5,
   setupText: "Lower your chest to the floor, then push back up.",

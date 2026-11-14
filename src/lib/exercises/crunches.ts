@@ -9,6 +9,7 @@ export const crunches: ExerciseConfig = baseExercise({
   cameraAngle: "side",
   downThreshold: 150,
   upThreshold: 100,
+  angleDirection: "decreasing",
   repCompletedOn: "up-to-down",
   setupText: "Crunch your shoulders up, then lower back down.",
   phonePlacement: "Side view, phone at floor level, ~1 meter away.",

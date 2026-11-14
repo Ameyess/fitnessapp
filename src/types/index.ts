@@ -21,6 +21,14 @@ export interface ExerciseConfig {
   mirrorFrontCamera: boolean
   downThreshold: number
   upThreshold: number
+  /**
+   * How the joint angle maps to the "up" phase.
+   *  - "increasing": a larger angle means the "up" phase (pushups, squats,
+   *    jumping jacks - the joint EXTENDS when you push/stand).
+   *  - "decreasing": a larger angle means the "down" phase (situps, crunches
+   *    - the joint FOLDS when you sit up).
+   */
+  angleDirection?: "increasing" | "decreasing"
   repCompletedOn: "up-to-down" | "down-to-up"
   targetSeconds?: number
   setupText: string

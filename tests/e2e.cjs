@@ -192,6 +192,15 @@ async function main() {
   )
   record("camera stream starts (get-in-frame ready)", true)
 
+  // Wait until the video element actually has decoded frames
+  await page.waitForFunction(
+    () => {
+      const v = document.querySelector("video")
+      return v && v.readyState >= 2 && v.videoWidth > 0
+    },
+    { timeout: 20000 }
+  )
+
   const camInfo = await page.evaluate(() => {
     const v = document.querySelector("video")
     return {
@@ -334,17 +343,29 @@ async function main() {
   record("warm reload -> home under 1500ms", warmMs < 1500, `${warmMs}ms`)
 
   /* ---------- 4. Theme ---------- */
-  const themeBtn = p2.getByRole("button", { name: /switch to (dark|light) mode/i })
-  await themeBtn.click()
+  // The header theme toggle is hidden on narrow phones (it lives in
+  // Settings), so test the Settings selector on mobile.
+  await p2.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" })
+  await p2.waitForTimeout(700)
+  await p2.getByRole("button", { name: /^dark$/i }).first().click()
   await p2.waitForTimeout(400)
   const isDark = await p2.evaluate(() =>
     document.documentElement.classList.contains("dark")
   )
-  record("theme toggle switches to dark", isDark)
+  record("theme switch (Settings) switches to dark", isDark)
   await p2.screenshot({ path: path.join(SHOTS, "04-home-dark.png"), fullPage: true })
 
   const bg = await p2.evaluate(() => getComputedStyle(document.body).backgroundColor)
   record("dark theme repaints the background", bg === "rgb(19, 31, 36)", bg)
+
+  // The header toggle must exist on wider viewports
+  await p2.setViewportSize({ width: 900, height: 800 })
+  await p2.goto(`${BASE}/`, { waitUntil: "domcontentloaded" })
+  await p2.waitForTimeout(900)
+  const wideToggle = await p2.evaluate(
+    () => !!document.querySelector('button[aria-label^="Switch to"]')
+  )
+  record("header theme toggle present on wide screens", wideToggle)
 
   // The floating streak button must not cover interactive content
   const overlap = await p2.evaluate(() => {

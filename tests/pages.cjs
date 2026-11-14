@@ -105,6 +105,30 @@ function record(name, pass, detail) {
     page.off("console", onConsole)
   }
 
+  /* ---------- narrow viewports (header must never overflow) ---------- */
+  for (const width of [360, 320]) {
+    await page.setViewportSize({ width, height: 740 })
+    await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" })
+    await page.waitForTimeout(900)
+    const info = await page.evaluate(() => {
+      const header = document.querySelector("header")
+      const last = header ? header.querySelector("nav[aria-label='Main'] button:last-of-type") : null
+      return {
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        headerRight: header ? header.getBoundingClientRect().right : null,
+        viewport: window.innerWidth,
+        lastBtnRight: last ? last.getBoundingClientRect().right : null,
+      }
+    })
+    record(
+      `header fits at ${width}px`,
+      info.overflow <= 1 && (info.lastBtnRight ?? 0) <= info.viewport,
+      `overflow=${info.overflow}px lastBtnRight=${info.lastBtnRight} vw=${info.viewport}`
+    )
+    await page.screenshot({ path: path.join(SHOTS, `narrow-${width}.png`) })
+  }
+  await page.setViewportSize({ width: 414, height: 896 })
+
   await browser.close()
   const passed = results.filter((r) => r.pass).length
   console.log(`\n=== ${passed}/${results.length} page checks passed ===`)

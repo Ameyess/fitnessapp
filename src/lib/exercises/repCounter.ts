@@ -15,7 +15,7 @@ export interface RepCounterInput {
   now: number
 }
 
-const COOLDOWN_MS = 700 // min time between reps to prevent double counting
+const COOLDOWN_MS = 350 // min time between reps to prevent double counting
 
 export function createRepCounter(config: ExerciseConfig) {
   let state: RepCounterState = {
@@ -23,7 +23,7 @@ export function createRepCounter(config: ExerciseConfig) {
     phase: "resting",
     angle: null,
     inFrame: false,
-    lastRepTime: 0,
+    lastRepTime: -Infinity,
   }
 
   // For timed exercises, track hold start
@@ -106,27 +106,39 @@ export function createRepCounter(config: ExerciseConfig) {
 
       state = { ...state, angle }
 
-      // Determine phase with hysteresis
-      let phase: RepPhase = state.phase
+      // Determine phase with hysteresis.
+      // IMPORTANT: the *previous* phase must be captured BEFORE the state
+      // is updated, otherwise the transition can never be detected and reps
+      // are never counted.
+      const prevPhase = state.phase
+      let phase: RepPhase = prevPhase
       if (angle != null) {
-        if (angle < config.downThreshold) phase = "down"
-        else if (angle > config.upThreshold) phase = "up"
+        if (config.angleDirection === "decreasing") {
+          // The joint FOLDS when the user lifts (situps, crunches):
+          // a LARGER angle is the "down" phase.
+          if (angle > config.downThreshold) phase = "down"
+          else if (angle < config.upThreshold) phase = "up"
+        } else {
+          // The joint EXTENDS when the user lifts (pushups, squats):
+          // a LARGER angle is the "up" phase.
+          if (angle < config.downThreshold) phase = "down"
+          else if (angle > config.upThreshold) phase = "up"
+        }
         // else keep previous (hysteresis)
       }
       state = { ...state, phase }
 
       // Rep counting on transition
-      if (
-        state.phase !== "resting" &&
-        now - state.lastRepTime > COOLDOWN_MS
-      ) {
-        const prev = state.phase
-        // We count when entering the completion phase
+      if (state.phase !== prevPhase && prevPhase !== "resting") {
         const completed =
-          config.repCompletedOn === "down-to-up" && prev === "down" && state.phase === "up" ||
-          config.repCompletedOn === "up-to-down" && prev === "up" && state.phase === "down"
+          (config.repCompletedOn === "down-to-up" &&
+            prevPhase === "down" &&
+            state.phase === "up") ||
+          (config.repCompletedOn === "up-to-down" &&
+            prevPhase === "up" &&
+            state.phase === "down")
 
-        if (completed && prev !== state.phase) {
+        if (completed && now - state.lastRepTime > COOLDOWN_MS) {
           state = { ...state, reps: state.reps + 1, lastRepTime: now }
         }
       }
@@ -135,7 +147,13 @@ export function createRepCounter(config: ExerciseConfig) {
     },
 
     reset() {
-      state = { reps: 0, phase: "resting", angle: null, inFrame: false, lastRepTime: 0 }
+      state = {
+        reps: 0,
+        phase: "resting",
+        angle: null,
+        inFrame: false,
+        lastRepTime: -Infinity,
+      }
       holdStart = null
     },
 

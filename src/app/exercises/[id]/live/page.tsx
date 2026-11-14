@@ -136,6 +136,24 @@ export default function LiveWorkoutPage() {
     }
   }, [facingMode, add])
 
+  // Only report the camera as ready once the <video> actually has frames.
+  useEffect(() => {
+    if (!stream) return
+    let raf = 0
+    const check = () => {
+      const v = videoRef.current
+      // Only trust the CURRENT stream - a superseded stream may still be
+      // attached for a frame after StrictMode remounts the effect.
+      if (v && v.srcObject === stream && v.readyState >= 2 && v.videoWidth > 0) {
+        setCameraState("ready")
+        return
+      }
+      raf = requestAnimationFrame(check)
+    }
+    raf = requestAnimationFrame(check)
+    return () => cancelAnimationFrame(raf)
+  }, [stream])
+
   // --- wake lock ---
   const requestWakeLock = useCallback(async () => {
     try {
@@ -288,7 +306,6 @@ export default function LiveWorkoutPage() {
         stream={stream}
         videoRef={videoRef}
         mirror={facingMode === "user"}
-        onLoadedMetadata={() => setCameraState("ready")}
       />
 
       {/* Skeleton overlay - always mounted so the layer never pops in/out */}
@@ -371,21 +388,45 @@ export default function LiveWorkoutPage() {
         )}
       </AnimatePresence>
 
-      {/* ---- HUD ---- */}
+      {/* ---- HUD: top row + bottom controls, centre kept clear for the body ---- */}
       <div className="pointer-events-none absolute inset-0 flex flex-col p-3 safe-area-pad-top safe-area-pad-bottom">
         <div className="flex items-start justify-between gap-2">
           <button
-            onClick={() => router.replace("/home")}
+            onClick={() => router.replace("/")}
             aria-label="Close workout"
-            className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-black/45 backdrop-blur active:scale-90"
+            className="pointer-events-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-black/55 backdrop-blur active:scale-90"
           >
             <X className="h-5 w-5 text-white" />
           </button>
 
-          <div className="flex flex-col items-end gap-2">
+          {/* Rep counter lives at the TOP so it never covers your torso */}
+          {!showGuide && (
+            <div
+              className="pointer-events-auto flex flex-col items-center rounded-3xl border-2 px-4 py-2"
+              style={{
+                backgroundColor: "rgba(10,16,20,0.72)",
+                borderColor: "rgba(255,255,255,0.16)",
+                backdropFilter: "blur(10px)",
+              }}
+            >
+              <RepCounterDisplay
+                config={config}
+                reps={reps}
+                phase={phase}
+                angle={angle}
+                inFrame={inFrame}
+                seconds={seconds}
+                goal={goal}
+                onDark
+                layout="row"
+              />
+            </div>
+          )}
+
+          <div className="flex shrink-0 flex-col items-end gap-2">
             {showModelLoading && (
-              <span className="rounded-full bg-black/45 px-3 py-1.5 text-xs font-bold text-white/90 backdrop-blur">
-                Loading pose tracker…
+              <span className="rounded-full bg-black/55 px-3 py-1.5 text-xs font-bold text-white/90 backdrop-blur">
+                Loading tracker…
               </span>
             )}
             <div className="pointer-events-auto flex gap-2">
@@ -394,14 +435,14 @@ export default function LiveWorkoutPage() {
                   setFacingMode((f) => (f === "user" ? "environment" : "user"))
                 }
                 aria-label="Switch camera"
-                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black/45 backdrop-blur active:scale-90"
+                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/55 backdrop-blur active:scale-90"
               >
                 <RotateCcw className="h-5 w-5 text-white" />
               </button>
               <button
                 onClick={() => setSoundOn((s) => !s)}
                 aria-label="Toggle sound"
-                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black/45 backdrop-blur active:scale-90"
+                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/55 backdrop-blur active:scale-90"
               >
                 {soundOn ? (
                   <Speaker className="h-5 w-5 text-white" />
@@ -413,8 +454,9 @@ export default function LiveWorkoutPage() {
           </div>
         </div>
 
+        {/* Middle - only the setup card lives here, so your body stays visible */}
         <div className="pointer-events-auto flex flex-1 flex-col items-center justify-center gap-3">
-          {showGuide ? (
+          {showGuide && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -435,85 +477,73 @@ export default function LiveWorkoutPage() {
               <p className="mb-5 text-xs font-bold" style={{ color: "var(--c-muted)" }}>
                 {config.distance}
               </p>
-              <Button variant="primary" block onClick={handleStart} disabled={cameraState !== "ready"}>
+              <Button
+                variant="primary"
+                block
+                onClick={handleStart}
+                disabled={cameraState !== "ready"}
+              >
                 {cameraState === "ready" ? "Start counting" : "Waiting for camera…"}
               </Button>
             </motion.div>
-          ) : (
-            <>
-              <div
-                className="rounded-3xl border-2 px-5 py-4"
-                style={{
-                  backgroundColor: "rgba(10,16,20,0.72)",
-                  borderColor: "rgba(255,255,255,0.18)",
-                  backdropFilter: "blur(10px)",
-                }}
-              >
-                <RepCounterDisplay
-                  config={config}
-                  reps={reps}
-                  phase={phase}
-                  angle={angle}
-                  inFrame={inFrame}
-                  seconds={seconds}
-                  goal={goal}
-                  onDark
-                />
-              </div>
-
-              {!inFrame && (
-                <div
-                  className="flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-extrabold"
-                  style={{
-                    backgroundColor: "var(--c-flame-soft)",
-                    borderColor: "transparent",
-                    color: "var(--c-flame)",
-                  }}
-                >
-                  <span aria-hidden>⚠️</span> Get in frame
-                </div>
-              )}
-
-              {/* Manual rep correction */}
-              <div className="pointer-events-auto flex items-center gap-2">
-                <button
-                  onClick={subtractRep}
-                  aria-label="Remove a rep"
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black/45 backdrop-blur active:scale-90"
-                >
-                  <Minus className="h-5 w-5 text-white" />
-                </button>
-                <span className="rounded-full bg-black/45 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-white/70 backdrop-blur">
-                  Fix count
-                </span>
-                <button
-                  onClick={addRep}
-                  aria-label="Add a rep"
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black/45 backdrop-blur active:scale-90"
-                >
-                  <Plus className="h-5 w-5 text-white" />
-                </button>
-              </div>
-
-              <div className="pointer-events-auto flex items-center gap-3">
-                <button
-                  onClick={handlePause}
-                  aria-label={isPaused ? "Resume" : "Pause"}
-                  className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/45 backdrop-blur active:scale-90"
-                >
-                  {isPaused ? (
-                    <Play className="h-6 w-6 text-white" />
-                  ) : (
-                    <Pause className="h-6 w-6 text-white" />
-                  )}
-                </button>
-                <Button variant="danger" onClick={handleFinish}>
-                  Finish
-                </Button>
-              </div>
-            </>
           )}
         </div>
+
+        {/* Bottom controls */}
+        {!showGuide && (
+          <div className="pointer-events-auto flex flex-col items-center gap-3">
+            {!inFrame && (
+              <div
+                className="flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-extrabold"
+                style={{
+                  backgroundColor: "rgba(255,150,0,0.95)",
+                  borderColor: "transparent",
+                  color: "#ffffff",
+                }}
+              >
+                <span aria-hidden>⚠️</span> Get in frame
+              </div>
+            )}
+
+            {/* Manual rep correction */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={subtractRep}
+                aria-label="Remove a rep"
+                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/55 backdrop-blur active:scale-90"
+              >
+                <Minus className="h-5 w-5 text-white" />
+              </button>
+              <span className="rounded-full bg-black/55 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-white/80 backdrop-blur">
+                Fix count
+              </span>
+              <button
+                onClick={addRep}
+                aria-label="Add a rep"
+                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/55 backdrop-blur active:scale-90"
+              >
+                <Plus className="h-5 w-5 text-white" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handlePause}
+                aria-label={isPaused ? "Resume" : "Pause"}
+                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/55 backdrop-blur active:scale-90"
+              >
+                {isPaused ? (
+                  <Play className="h-6 w-6 text-white" />
+                ) : (
+                  <Pause className="h-6 w-6 text-white" />
+                )}
+              </button>
+              <Button variant="danger" onClick={handleFinish}>
+                Finish
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

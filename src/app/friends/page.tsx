@@ -12,9 +12,10 @@ import {
   declineFriendRequest,
   getPublicStats,
 } from "@/lib/db"
+import Link from "next/link"
 import { Button } from "@/components/ui/Button"
 import { Input, EmptyState, LoadingSpinner } from "@/components/ui/Input"
-import { Users, UserPlus, Check, X, Send, Copy, Flame } from "lucide-react"
+import { Users, UserPlus, Check, X, Send, Copy, Flame, Trophy } from "lucide-react"
 
 export default function FriendsPage() {
   const { user } = useAuth()
@@ -109,6 +110,13 @@ export default function FriendsPage() {
         >
           <Copy className="h-3.5 w-3.5" /> Copy invite link
         </button>
+        <Link
+          href="/leaderboard"
+          className="tap-target mt-2 w-full justify-center gap-2 rounded-2xl border-2 text-xs font-extrabold"
+          style={{ borderColor: "var(--c-border)", color: "var(--c-muted)" }}
+        >
+          <Trophy className="h-3.5 w-3.5" /> View leaderboard
+        </Link>
         {msg && (
           <p className="mt-2 text-center text-xs font-extrabold" style={{ color: "var(--c-primary)" }}>
             {msg}

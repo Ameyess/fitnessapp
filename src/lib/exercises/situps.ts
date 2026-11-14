@@ -9,6 +9,7 @@ export const situps: ExerciseConfig = baseExercise({
   cameraAngle: "side",
   downThreshold: 150,
   upThreshold: 80,
+  angleDirection: "decreasing",
   repCompletedOn: "up-to-down",
   setupText: "Lie back down, then sit all the way up.",
   phonePlacement: "Side view, phone at floor level, ~1 meter away.",

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { Home, BarChart3, Users, Settings } from "lucide-react"
 import { useTheme } from "@/components/ui/ThemeProvider"
 import { useProfileStore } from "@/store/profile"
+import { useAuth } from "@/hooks/useAuth"
 
 const TABS = [
   { href: "/", label: "Home", icon: Home },
@@ -18,12 +19,14 @@ export default function TopNav() {
   const pathname = usePathname()
   const { resolved, toggle } = useTheme()
   const streak = useProfileStore((s) => s.profile?.streak ?? 0)
+  const { user } = useAuth()
 
-  // The live workout is a fullscreen experience - no app chrome.
   const isImmersive =
     !!pathname && pathname.startsWith("/exercises/") && pathname.endsWith("/live")
 
-  if (isImmersive) return null
+  // No app chrome on the fullscreen workout, the sign-in screen, or when
+  // signed out (there is no meaningful streak to show).
+  if (isImmersive || !user || pathname === "/sign-in") return null
 
   return (
     <header
@@ -34,15 +37,15 @@ export default function TopNav() {
       }}
     >
       <div
-        className="mx-auto flex max-w-3xl items-center justify-between gap-2 px-3 safe-area-pad-top"
-        style={{ height: 56 }}
+        className="mx-auto flex max-w-3xl items-center justify-between gap-1 px-2 safe-area-pad-top sm:gap-2 sm:px-3"
+        style={{ height: 60 }}
       >
         {/* Brand */}
         <Link
           href="/"
           aria-label="FitStreak home"
           className="tap-target flex shrink-0 items-center gap-1.5 text-xl font-black tracking-tight"
-          style={{ color: "var(--c-primary)" }}
+          style={{ color: "var(--c-primary-text)" }}
         >
           <span aria-hidden>💪</span>
           <span className="hidden sm:inline">FitStreak</span>
@@ -52,11 +55,11 @@ export default function TopNav() {
         <Link
           href="/"
           aria-label={`Current streak: ${streak} day${streak === 1 ? "" : "s"}`}
-          className="tap-target flex shrink-0 items-center gap-1 rounded-full border-2 px-3 font-extrabold transition-transform active:scale-95"
+          className="tap-target flex shrink-0 items-center gap-1 rounded-full border-2 px-2 font-extrabold transition-transform active:scale-95 sm:px-3"
           style={{
             borderColor: "var(--c-flame)",
             backgroundColor: "var(--c-flame-soft)",
-            color: "var(--c-flame)",
+            color: "var(--c-flame-text)",
           }}
         >
           <span aria-hidden className="text-base leading-none">
@@ -66,7 +69,7 @@ export default function TopNav() {
         </Link>
 
         {/* Nav icons */}
-        <nav className="flex items-center gap-0.5" aria-label="Main">
+        <nav className="flex items-center" aria-label="Main">
           {TABS.map((tab) => {
             const active =
               pathname === tab.href ||
@@ -79,26 +82,28 @@ export default function TopNav() {
                 aria-label={tab.label}
                 aria-current={active ? "page" : undefined}
                 title={tab.label}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl transition-colors active:scale-90"
+                className="flex h-12 w-12 items-center justify-center rounded-2xl transition-colors active:scale-90"
                 style={{
-                  color: active ? "var(--c-primary)" : "var(--c-faint)",
+                  color: active ? "var(--c-primary-text)" : "var(--c-faint)",
                   backgroundColor: active ? "var(--c-primary-soft)" : "transparent",
                 }}
               >
-                <Icon className="h-5 w-5" strokeWidth={active ? 2.75 : 2.25} />
+                <Icon className="h-6 w-6" strokeWidth={active ? 2.75 : 2.25} />
               </Link>
             )
           })}
+          {/* Theme toggle is hidden on narrow phones (it lives in Settings)
+              so the header never overflows. */}
           <button
             onClick={toggle}
             aria-label={`Switch to ${resolved === "dark" ? "light" : "dark"} mode`}
             title="Toggle theme"
-            className="flex h-11 w-11 items-center justify-center rounded-2xl transition-colors active:scale-90"
+            className="hidden h-12 w-12 items-center justify-center rounded-2xl transition-colors active:scale-90 sm:flex"
             style={{ color: "var(--c-faint)" }}
           >
             {resolved === "dark" ? (
               <svg
-                className="h-5 w-5"
+                className="h-6 w-6"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -110,7 +115,7 @@ export default function TopNav() {
               </svg>
             ) : (
               <svg
-                className="h-5 w-5"
+                className="h-6 w-6"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"

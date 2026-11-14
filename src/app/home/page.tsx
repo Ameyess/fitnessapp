@@ -9,7 +9,7 @@ import { getExercise } from "@/lib/exercises"
 import { ProgressBar, ProgressRing } from "@/components/ui/StreakFlame"
 import { Button } from "@/components/ui/Button"
 import { motion } from "framer-motion"
-import { Play, CheckCircle2, ChevronRight, Dumbbell } from "lucide-react"
+import { Play, CheckCircle2, ChevronRight, BarChart3, Trophy } from "lucide-react"
 
 export default function HomePage() {
   const { user } = useAuth()
@@ -105,14 +105,16 @@ export default function HomePage() {
                 {profile.streak === 0 ? "Start your streak today!" : "Keep it going!"}
               </h1>
               <p className="text-sm font-bold" style={{ color: "var(--c-muted)" }}>
-                {profile.streak} day{profile.streak === 1 ? "" : "s"} in a row · best{" "}
-                {profile.longestStreak}
+                {profile.streak === 0
+                  ? "Complete every goal to earn your first flame."
+                  : "Complete every goal to extend it."}
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <span className="chip">
                   {doneGoals.length}/{activeGoals.length} goals
                 </span>
                 <span className="chip">{totalReps} reps today</span>
+                <span className="chip">Best {profile.longestStreak}</span>
               </div>
             </div>
           </div>
@@ -186,44 +188,37 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Quick start */}
-        <section>
-          <h2 className="mb-3 text-lg font-black" style={{ color: "var(--c-text)" }}>
-            Quick start
-          </h2>
-          <div className="grid grid-cols-2 gap-2.5">
-            {ALL_EXERCISES.map((exId) => {
-              const ex = getExercise(exId)
-              const done = goals.find((g) => g.exId === exId)?.done
-              return (
-                <Link key={exId} href={`/exercises/${exId}`}>
-                  <div
-                    className="flex items-center justify-between rounded-2xl border-2 px-4 py-3 transition-transform active:scale-95"
-                    style={{
-                      backgroundColor: done ? "var(--c-primary-soft)" : "var(--c-surface)",
-                      borderColor: done ? "transparent" : "var(--c-border)",
-                    }}
-                  >
-                    <span className="truncate text-sm font-extrabold" style={{ color: "var(--c-text)" }}>
-                      {ex?.name}
-                    </span>
-                    <Play className="h-4 w-4 shrink-0" style={{ color: "var(--c-primary)" }} />
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-
-          <Link href="/history" className="mt-3 block">
+        {/* Shortcuts */}
+        <section className="grid grid-cols-2 gap-2.5">
+          <Link href="/history">
             <div
-              className="flex items-center justify-between rounded-2xl border-2 px-4 py-3 transition-transform active:scale-95"
+              className="flex h-full items-center justify-between gap-2 rounded-2xl border-2 px-4 py-3.5 transition-transform active:scale-95"
               style={{ backgroundColor: "var(--c-surface)", borderColor: "var(--c-border)" }}
             >
-              <span className="flex items-center gap-2 text-sm font-extrabold" style={{ color: "var(--c-text)" }}>
-                <Dumbbell className="h-4 w-4" style={{ color: "var(--c-blue)" }} />
-                View your progress
+              <span
+                className="flex items-center gap-2 text-sm font-extrabold"
+                style={{ color: "var(--c-text)" }}
+              >
+                <BarChart3 className="h-4 w-4 shrink-0" style={{ color: "var(--c-blue-text)" }} />
+                Your progress
               </span>
-              <ChevronRight className="h-5 w-5" style={{ color: "var(--c-faint)" }} />
+              <ChevronRight className="h-5 w-5 shrink-0" style={{ color: "var(--c-faint)" }} />
+            </div>
+          </Link>
+
+          <Link href="/leaderboard">
+            <div
+              className="flex h-full items-center justify-between gap-2 rounded-2xl border-2 px-4 py-3.5 transition-transform active:scale-95"
+              style={{ backgroundColor: "var(--c-surface)", borderColor: "var(--c-border)" }}
+            >
+              <span
+                className="flex items-center gap-2 text-sm font-extrabold"
+                style={{ color: "var(--c-text)" }}
+              >
+                <Trophy className="h-4 w-4 shrink-0" style={{ color: "var(--c-flame-text)" }} />
+                Leaderboard
+              </span>
+              <ChevronRight className="h-5 w-5 shrink-0" style={{ color: "var(--c-faint)" }} />
             </div>
           </Link>
         </section>
