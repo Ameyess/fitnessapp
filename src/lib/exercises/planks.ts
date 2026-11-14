@@ -4,6 +4,7 @@ import { baseExercise } from "./base"
 export const planks: ExerciseConfig = baseExercise({
   id: "planks",
   name: "Plank",
+  icon: "🧱",
   type: "timed",
   targetSeconds: 60,
   trackedLandmarks: [11, 12, 23, 24, 25, 26, 27, 28],

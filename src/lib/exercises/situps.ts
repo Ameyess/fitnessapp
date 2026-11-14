@@ -4,6 +4,7 @@ import { baseExercise } from "./base"
 export const situps: ExerciseConfig = baseExercise({
   id: "situps",
   name: "Situps",
+  icon: "🧘",
   trackedLandmarks: [11, 12, 23, 24, 25, 26],
   requiredLandmarks: [11, 12, 23, 24],
   cameraAngle: "side",

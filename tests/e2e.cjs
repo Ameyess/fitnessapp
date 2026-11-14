@@ -306,6 +306,159 @@ async function main() {
   )
   await page.screenshot({ path: path.join(SHOTS, "02-live-workout.png"), fullPage: true })
 
+  /* ---------- 2b. Manual rep correction is not clobbered ---------- */
+  const readCount = () =>
+    page.evaluate(() => {
+      const el = document.querySelector('[data-testid="rep-count"]')
+      return el ? parseInt((el.textContent || "0").trim(), 10) : null
+    })
+
+  // The controls auto-hide, so make sure they are on screen first.
+  const controlsVisible = () =>
+    page.evaluate(() => {
+      const c = document.querySelector('[data-testid="workout-controls"]')
+      if (!c) return false
+      const cs = getComputedStyle(c)
+      return parseFloat(cs.opacity) > 0.5 && cs.pointerEvents !== "none"
+    })
+
+  const ensureControls = async () => {
+    if (await controlsVisible()) return
+    await page.locator('[data-testid="show-controls"]').click({ force: true })
+    await page.waitForTimeout(500)
+  }
+
+  await ensureControls()
+  const countBefore = await readCount()
+  await page.getByRole("button", { name: /add a rep/i }).click()
+  await page.waitForTimeout(300)
+  const countAfterAdd = await readCount()
+  // Wait through several detection frames - the machine count must not
+  // overwrite the user's manual correction.
+  await page.waitForTimeout(1600)
+  const countAfterWait = await readCount()
+  record(
+    "manual rep correction increments the counter",
+    countAfterAdd === (countBefore ?? 0) + 1,
+    `before=${countBefore} after=${countAfterAdd}`
+  )
+  record(
+    "manual rep correction survives the detection loop",
+    countAfterWait === countAfterAdd,
+    `afterAdd=${countAfterAdd} afterWait=${countAfterWait}`
+  )
+
+  /* ---------- 2c. Controls auto-hide and can be restored ---------- */
+  await page.waitForTimeout(4600)
+  const hiddenState = await page.evaluate(() => {
+    const c = document.querySelector('[data-testid="workout-controls"]')
+    if (!c) return { present: false }
+    const r = c.getBoundingClientRect()
+    return {
+      present: true,
+      opacity: parseFloat(getComputedStyle(c).opacity),
+      pointerEvents: getComputedStyle(c).pointerEvents,
+      rect: { top: r.top, bottom: r.bottom, left: r.left, right: r.right },
+    }
+  })
+  record(
+    "controls auto-hide so the video stays unobstructed",
+    hiddenState.present &&
+      (hiddenState.opacity < 0.15 || hiddenState.pointerEvents === "none"),
+    JSON.stringify(hiddenState)
+  )
+
+  // Restore by tapping the video
+  await page.mouse.click(207, 500)
+  await page.waitForTimeout(500)
+  const shownState = await page.evaluate(() => {
+    const c = document.querySelector('[data-testid="workout-controls"]')
+    if (!c) return { present: false }
+    return {
+      present: true,
+      opacity: parseFloat(getComputedStyle(c).opacity),
+      pointerEvents: getComputedStyle(c).pointerEvents,
+    }
+  })
+  record(
+    "tapping the video restores the controls",
+    shownState.present &&
+      shownState.opacity > 0.5 &&
+      shownState.pointerEvents !== "none",
+    JSON.stringify(shownState)
+  )
+
+  /* ---------- 2d. No visible control covers the tracked region ---------- */
+  const bodyOverlap = await page.evaluate(() => {
+    const canvas = document.querySelector("canvas")
+    if (!canvas) return { skipped: true }
+    const ctx = canvas.getContext("2d")
+    const { width, height } = canvas
+    const d = ctx.getImageData(0, 0, width, height).data
+    let minX = 1e9,
+      maxX = -1,
+      minY = 1e9,
+      maxY = -1,
+      count = 0
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4
+        if (
+          d[i + 3] > 40 &&
+          d[i + 1] > 140 &&
+          d[i] < 160 &&
+          d[i + 2] < 110 &&
+          d[i + 1] > d[i] + 40
+        ) {
+          count++
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+          if (y < minY) minY = y
+          if (y > maxY) maxY = y
+        }
+      }
+    }
+    if (maxX < 0) return { skipped: true }
+    // Canvas is 2x DPR; convert to CSS pixels
+    const dpr = width / (canvas.clientWidth || 1)
+    const box = {
+      left: minX / dpr,
+      right: maxX / dpr,
+      top: minY / dpr,
+      bottom: maxY / dpr,
+    }
+    const area = (box.right - box.left) * (box.bottom - box.top)
+    const hits = []
+    document.querySelectorAll("button, a").forEach((el) => {
+      const cs = getComputedStyle(el)
+      if (cs.display === "none" || cs.visibility === "hidden") return
+      if (parseFloat(cs.opacity) < 0.15) return
+      if (cs.pointerEvents === "none") return
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 || r.height === 0) return
+      const ix = Math.max(0, Math.min(r.right, box.right) - Math.max(r.left, box.left))
+      const iy = Math.max(0, Math.min(r.bottom, box.bottom) - Math.max(r.top, box.top))
+      const inter = ix * iy
+      if (inter > 0) {
+        hits.push({
+          label: (el.getAttribute("aria-label") || el.textContent || "").trim().slice(0, 24),
+          pct: Math.round((inter / area) * 100),
+        })
+      }
+    })
+    return { skipped: false, area, hits }
+  })
+  const worst = bodyOverlap.skipped
+    ? 0
+    : bodyOverlap.hits.reduce((m, h) => Math.max(m, h.pct), 0)
+  record(
+    "no visible control covers the tracked region",
+    bodyOverlap.skipped || worst < 15,
+    bodyOverlap.skipped
+      ? "no markers to compare"
+      : `worst overlap=${worst}% ${JSON.stringify(bodyOverlap.hits)}`
+  )
+
   /* ---------- 3. Sign-in latency ---------- */
   const ctx2 = await browser.newContext({
     viewport: { width: 414, height: 896 },

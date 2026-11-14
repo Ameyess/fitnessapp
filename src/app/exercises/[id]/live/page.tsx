@@ -66,6 +66,8 @@ export default function LiveWorkoutPage() {
   const lastRepRef = useRef<number>(0)
   const repsRef = useRef(0)
   const lastCountedReps = useRef(0)
+  /** Timestamp of the last user interaction with the workout controls. */
+  const lastInteractionRef = useRef(Date.now())
   const audioCtxRef = useRef<AudioContext | null>(null)
   const repCounterRef = useRef<ReturnType<typeof createRepCounter> | null>(null)
   const { detector, status: modelStatus, error: modelError } = usePoseTracker()
@@ -218,11 +220,14 @@ export default function LiveWorkoutPage() {
       const state = repCounterRef.current.update({ config, landmarks: lm, now })
       setFrame(state.inFrame, state.angle, state.phase)
 
-      // Always mirror the authoritative rep count - never increment locally,
-      // which would lag by one rep at fast cadence.
+      // Mirror the authoritative rep count from the state machine (never
+      // increment locally, which would lag by one rep at fast cadence).
+      // The delta is applied to the CURRENT store value so a manual
+      // correction made with the -/+ buttons is never wiped out.
       if (state.reps !== repsRef.current) {
+        const delta = state.reps - repsRef.current
         repsRef.current = state.reps
-        syncReps(state.reps)
+        syncReps(Math.max(0, useWorkoutStore.getState().reps + delta))
       }
 
       // Timed exercises measure REAL hold time, not wall-clock time.
@@ -252,17 +257,24 @@ export default function LiveWorkoutPage() {
   }, [isActive, isPaused, tick])
 
   // Auto-hide the controls so your body is never covered mid-workout.
+  // Uses an interval + an "last interaction" timestamp: a plain setTimeout
+  // would be reset by the per-second `seconds` update and never fire.
   useEffect(() => {
-    if (!isActive || showGuide || !showControls) return
-    const t = setTimeout(() => setShowControls(false), 4000)
-    return () => clearTimeout(t)
-  }, [isActive, showGuide, showControls, reps, seconds])
+    if (!isActive || showGuide) return
+    const iv = setInterval(() => {
+      if (showControls && Date.now() - lastInteractionRef.current > 4000) {
+        setShowControls(false)
+      }
+    }, 400)
+    return () => clearInterval(iv)
+  }, [isActive, showGuide, showControls])
 
   const handleStart = async () => {
     await requestWakeLock()
     start()
     setShowGuide(false)
     setShowControls(true)
+    lastInteractionRef.current = Date.now()
   }
 
   const handlePause = () => {
@@ -519,7 +531,11 @@ export default function LiveWorkoutPage() {
           <>
             <motion.button
               aria-label="Show controls"
-              onClick={() => setShowControls(true)}
+              data-testid="show-controls"
+              onClick={() => {
+                lastInteractionRef.current = Date.now()
+                setShowControls(true)
+              }}
               className="pointer-events-auto absolute inset-0 cursor-default"
               animate={{ opacity: showControls ? 0 : 1 }}
               style={{ pointerEvents: showControls ? "none" : "auto" }}
@@ -528,6 +544,10 @@ export default function LiveWorkoutPage() {
               initial={false}
               animate={{ opacity: showControls ? 1 : 0, y: showControls ? 0 : 24 }}
               transition={{ duration: 0.22 }}
+              data-testid="workout-controls"
+              onPointerDown={() => {
+                lastInteractionRef.current = Date.now()
+              }}
               className="pointer-events-auto flex items-center justify-center gap-2"
               style={{ pointerEvents: showControls ? "auto" : "none" }}
             >

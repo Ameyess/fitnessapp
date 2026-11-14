@@ -38,7 +38,7 @@ export default function ExerciseSetupPage() {
             className="flex h-12 w-12 items-center justify-center rounded-2xl text-2xl"
             style={{ backgroundColor: "var(--c-primary-soft)" }}
           >
-            🏋️
+            {config.icon}
           </div>
           <div>
             <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--c-text)" }}>

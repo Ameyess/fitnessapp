@@ -160,7 +160,7 @@ export default function HomePage() {
                         backgroundColor: g.done ? "var(--c-primary)" : "var(--c-surface-2)",
                       }}
                     >
-                      {g.done ? "✓" : "🏋️"}
+                      {g.done ? "✓" : g.ex?.icon}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="mb-1.5 flex items-baseline justify-between gap-2">

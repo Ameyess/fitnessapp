@@ -78,6 +78,7 @@ export function RepCounterDisplay({
       className="flex items-baseline gap-1.5"
     >
       <span
+        data-testid="rep-count"
         className="font-black leading-none tabular-nums"
         style={{
           color: textColor,

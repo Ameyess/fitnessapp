@@ -11,6 +11,8 @@ export type RepPhase = "up" | "down" | "holding" | "resting"
 export interface ExerciseConfig {
   id: ExerciseId
   name: string
+  /** Emoji shown in lists so every exercise is instantly recognisable. */
+  icon: string
   type: "rep" | "timed"
   /** All landmarks the exercise cares about (used for drawing / angle maths) */
   trackedLandmarks: number[]

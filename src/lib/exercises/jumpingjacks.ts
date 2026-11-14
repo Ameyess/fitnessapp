@@ -4,6 +4,7 @@ import { baseExercise } from "./base"
 export const jumpingjacks: ExerciseConfig = baseExercise({
   id: "jumpingjacks",
   name: "Jumping Jacks",
+  icon: "⭐",
   trackedLandmarks: [11, 12, 15, 16, 27, 28],
   requiredLandmarks: [11, 12, 15, 16],
   cameraAngle: "front",
