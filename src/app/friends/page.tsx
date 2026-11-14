@@ -3,12 +3,18 @@
 import * as React from "react"
 import { useAuth } from "@/hooks/useAuth"
 import { useEffect, useState } from "react"
-import { getUserProfile, getFriends, getPendingRequests, sendFriendRequest, acceptFriendRequest, declineFriendRequest, getPublicStats } from "@/lib/db"
-import Link from "next/link"
+import {
+  getUserProfile,
+  getFriends,
+  getPendingRequests,
+  sendFriendRequest,
+  acceptFriendRequest,
+  declineFriendRequest,
+  getPublicStats,
+} from "@/lib/db"
 import { Button } from "@/components/ui/Button"
-import { Input } from "@/components/ui/Input"
-import { EmptyState } from "@/components/ui/Input"
-import { Users, UserPlus, Clock, Check, X, Send } from "lucide-react"
+import { Input, EmptyState, LoadingSpinner } from "@/components/ui/Input"
+import { Users, UserPlus, Check, X, Send, Copy, Flame } from "lucide-react"
 
 export default function FriendsPage() {
   const { user } = useAuth()
@@ -17,15 +23,18 @@ export default function FriendsPage() {
   const [requests, setRequests] = useState<any[]>([])
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(true)
+  const [msg, setMsg] = useState("")
 
   useEffect(() => {
     if (!user) return
     const load = async () => {
       const p = await getUserProfile(user.uid)
       setProfile(p)
-      const f = await getFriends(user.uid)
+      const [f, r] = await Promise.all([
+        getFriends(user.uid).catch(() => []),
+        getPendingRequests(user.uid).catch(() => []),
+      ])
       setFriends(f)
-      const r = await getPendingRequests(user.uid)
       setRequests(r)
       setLoading(false)
     }
@@ -33,96 +42,169 @@ export default function FriendsPage() {
   }, [user])
 
   const addFriend = async () => {
-    if (!user || !search) return
-    // search by username/email - naive: treat search as friend uid lookup via public stats
+    if (!user || !search.trim()) return
+    setMsg("")
     try {
-      const stats = await getPublicStats(search)
-      if (!stats) throw new Error("User not found")
-      await sendFriendRequest(user.uid, search)
+      const stats = await getPublicStats(search.trim())
+      if (!stats) {
+        setMsg("No user found with that ID.")
+        return
+      }
+      await sendFriendRequest(user.uid, search.trim())
       setSearch("")
+      setMsg("Request sent!")
     } catch (e: any) {
-      alert(e.message ?? "Failed to send request")
+      setMsg(e?.message ?? "Failed to send request")
     }
   }
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center bg-slate-50">Loading…</div>
+  const copyInvite = async () => {
+    const link = `${window.location.origin}/?invite=${profile?.username ?? user?.uid ?? ""}`
+    try {
+      await navigator.clipboard.writeText(link)
+      setMsg("Invite link copied!")
+    } catch {
+      setMsg(link)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[calc(100vh-56px)] items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    )
+  }
   if (!user) return null
 
   return (
-    <div className="flex min-h-[calc(100vh-64px)] flex-col bg-slate-50 px-4 safe-area-pad-bottom">
-      <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 safe-area-pad-top">
-        <h2 className="text-xl font-bold text-slate-900">Friends</h2>
-      </header>
+    <div className="mx-auto max-w-lg px-4 py-5 pb-10">
+      <h1 className="mb-4 text-2xl font-black tracking-tight" style={{ color: "var(--c-text)" }}>
+        Friends
+      </h1>
 
-      <main className="flex-1 px-4 py-4 space-y-6">
-        <section>
-          <h3 className="text-lg font-bold text-slate-900 mb-3">Add friend</h3>
-          <div className="flex gap-2">
-            <Input placeholder="username or email" value={search} onChange={(e) => setSearch(e.target.value)} />
-            <Button variant="primary" onClick={addFriend}><Send className="w-4 h-4" /></Button>
-          </div>
-          <p className="text-xs text-slate-400 mt-1">Send an invite link or search by username.</p>
-        </section>
+      {/* Add friend */}
+      <div
+        className="mb-5 rounded-3xl border-2 p-5"
+        style={{ backgroundColor: "var(--c-surface)", borderColor: "var(--c-border)" }}
+      >
+        <h2 className="mb-3 text-sm font-extrabold" style={{ color: "var(--c-text)" }}>
+          Add a friend
+        </h2>
+        <div className="flex gap-2">
+          <Input
+            placeholder="User ID"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="mb-0 flex-1"
+          />
+          <Button variant="primary" onClick={addFriend}>
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+        <button
+          onClick={copyInvite}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border-2 py-2.5 text-xs font-extrabold"
+          style={{ borderColor: "var(--c-border)", color: "var(--c-muted)" }}
+        >
+          <Copy className="h-3.5 w-3.5" /> Copy invite link
+        </button>
+        {msg && (
+          <p className="mt-2 text-center text-xs font-extrabold" style={{ color: "var(--c-primary)" }}>
+            {msg}
+          </p>
+        )}
+      </div>
 
-        <section>
-          <h3 className="text-lg font-bold text-slate-900 mb-3">Friend requests</h3>
+      {/* Requests */}
+      {requests.length > 0 && (
+        <section className="mb-5">
+          <h2 className="mb-3 text-sm font-extrabold" style={{ color: "var(--c-text)" }}>
+            Friend requests
+          </h2>
           <div className="space-y-2">
-            {requests.length === 0 && (
-              <div className="text-center py-4 text-xs text-slate-400">No pending requests</div>
-            )}
             {requests.map((r) => (
-              <div key={r.id} className="flex items-center justify-between px-4 py-3 rounded-2xl border border-slate-200 bg-white">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center"><UserPlus className="w-5 h-5 text-slate-400" /></div>
-                  <div>
-                    <div className="text-sm font-medium text-slate-900">{r.from}</div>
-                    <div className="text-xs text-slate-500">wants to be friends</div>
+              <div
+                key={r.id}
+                className="flex items-center justify-between rounded-2xl border-2 px-4 py-3"
+                style={{ backgroundColor: "var(--c-surface)", borderColor: "var(--c-border)" }}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                    style={{ backgroundColor: "var(--c-surface-2)" }}
+                  >
+                    <UserPlus className="h-5 w-5" style={{ color: "var(--c-faint)" }} />
                   </div>
+                  <span className="truncate text-sm font-extrabold" style={{ color: "var(--c-text)" }}>
+                    {r.from}
+                  </span>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => acceptFriendRequest(r.id, r.from, r.from)}>
-                    <Check className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => declineFriendRequest(r.id)}>
-                    <X className="w-4 h-4" />
-                  </Button>
+                  <button
+                    onClick={() => acceptFriendRequest(r.id, r.from, r.from)}
+                    aria-label="Accept"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl active:scale-90"
+                    style={{ backgroundColor: "var(--c-primary)", color: "#fff" }}
+                  >
+                    <Check className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => declineFriendRequest(r.id)}
+                    aria-label="Decline"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl active:scale-90"
+                    style={{ backgroundColor: "var(--c-surface-2)", color: "var(--c-danger)" }}
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         </section>
+      )}
 
-        <section>
-          <h3 className="text-lg font-bold text-slate-900 mb-3">Your friends</h3>
+      {/* Friend list */}
+      <section>
+        <h2 className="mb-3 text-sm font-extrabold" style={{ color: "var(--c-text)" }}>
+          Your friends ({friends.length})
+        </h2>
+        {friends.length === 0 ? (
+          <EmptyState
+            title="No friends yet"
+            description="Add a friend to compare streaks and climb the leaderboard."
+            icon={<Users className="h-6 w-6" />}
+          />
+        ) : (
           <div className="space-y-2">
-            {friends.length === 0 && (
-              <EmptyState title="No friends yet" description="Add friends to compare streaks." icon={<Users className="w-6 h-6" />} />
-            )}
             {friends.map((f) => (
-              <Link key={f.id} href={`/friends/${f.friendId}`} className="block">
-                <div className="flex items-center justify-between px-4 py-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center"><Users className="w-5 h-5 text-slate-400" /></div>
-                    <div>
-                      <div className="text-sm font-medium text-slate-900">{f.friendId}</div>
-                      <div className="text-xs text-slate-500">Friend</div>
-                    </div>
+              <div
+                key={f.id}
+                className="flex items-center justify-between rounded-2xl border-2 px-4 py-3"
+                style={{ backgroundColor: "var(--c-surface)", borderColor: "var(--c-border)" }}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                    style={{ backgroundColor: "var(--c-surface-2)" }}
+                  >
+                    <Users className="h-5 w-5" style={{ color: "var(--c-faint)" }} />
                   </div>
-                  <StreakFlameMini count={0} />
+                  <span className="truncate text-sm font-extrabold" style={{ color: "var(--c-text)" }}>
+                    {f.friendId}
+                  </span>
                 </div>
-              </Link>
+                <span
+                  className="flex shrink-0 items-center gap-1 rounded-full border-2 px-2.5 py-1 text-xs font-extrabold"
+                  style={{ borderColor: "var(--c-flame)", color: "var(--c-flame)" }}
+                >
+                  <Flame className="h-3.5 w-3.5" />
+                </span>
+              </div>
             ))}
           </div>
-        </section>
-      </main>
+        )}
+      </section>
     </div>
-  )
-}
-
-function StreakFlameMini({ count = 0 }: { count?: number }) {
-  return (
-    <span className="inline-flex items-center rounded-full border border-flame-200 bg-flame-50 px-2 py-0.5 text-[10px] font-bold text-flame-700">
-      🔥 {count}
-    </span>
   )
 }

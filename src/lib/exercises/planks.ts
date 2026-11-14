@@ -7,6 +7,7 @@ export const planks: ExerciseConfig = baseExercise({
   type: "timed",
   targetSeconds: 60,
   trackedLandmarks: [11, 12, 23, 24, 25, 26, 27, 28],
+  requiredLandmarks: [11, 12, 23, 24],
   cameraAngle: "side",
   downThreshold: 160,
   upThreshold: 180,

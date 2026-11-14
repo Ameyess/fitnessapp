@@ -4,41 +4,57 @@ import * as React from "react"
 
 interface CameraViewProps {
   stream: MediaStream | null
-  width: number
-  height: number
-  mirror: boolean
+  /** The parent's ref MUST be attached to the <video> element so the
+   *  MediaPipe detection loop can read frames from it. */
+  videoRef?: React.RefObject<HTMLVideoElement>
+  width?: number
+  height?: number
+  mirror?: boolean
   onLoadedMetadata?: () => void
+  onError?: (err: Error) => void
 }
 
 export function CameraView({
   stream,
-  width,
-  height,
+  videoRef,
+  width = 1280,
+  height = 720,
   mirror = false,
   onLoadedMetadata,
+  onError,
 }: CameraViewProps) {
-  const videoRef = React.useRef<HTMLVideoElement>(null)
+  const localRef = React.useRef<HTMLVideoElement | null>(null)
+  const setRef = React.useCallback(
+    (node: HTMLVideoElement | null) => {
+      localRef.current = node
+      if (videoRef) (videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = node
+    },
+    [videoRef]
+  )
+
   React.useEffect(() => {
-    if (videoRef.current) videoRef.current.srcObject = stream
+    const el = localRef.current
+    if (!el) return
+    if (el.srcObject !== stream) {
+      el.srcObject = stream
+      // Autoplay can be rejected when the element is not yet in the DOM
+      const p = el.play()
+      if (p && typeof p.catch === "function") p.catch(() => {})
+    }
   }, [stream])
+
   return (
-    <div className="relative w-full h-full bg-slate-900 overflow-hidden rounded-3xl">
+    <div className="absolute inset-0 overflow-hidden bg-black">
       <video
-        ref={videoRef}
+        ref={setRef}
         autoPlay
         muted
         playsInline
+        disablePictureInPicture
         onLoadedMetadata={onLoadedMetadata}
-        className={`w-full h-full object-cover ${mirror ? "mirror" : ""}`}
+        className={`h-full w-full object-cover ${mirror ? "mirror" : ""}`}
+        style={{ transform: mirror ? "scaleX(-1)" : undefined }}
       />
-      <div className="absolute inset-0 flex items-center justify-center">
-        {stream ? null : (
-          <div className="flex flex-col items-center gap-2 text-slate-300">
-            <span className="text-4xl">📷</span>
-            <p className="text-sm font-medium">No camera feed</p>
-          </div>
-        )}
-      </div>
     </div>
   )
 }

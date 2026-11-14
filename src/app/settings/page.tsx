@@ -7,26 +7,27 @@ import { getUserProfile, setUserProfile } from "@/lib/db"
 import { STREAK_MILESTONES } from "@/types"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { Header } from "@/components/layout/Header"
-import { Moon, Sun, Bell, Clock, RefreshCw } from "lucide-react"
+import { useTheme } from "@/components/ui/ThemeProvider"
+import { Moon, Sun, Bell, Trophy, LogOut, Check } from "lucide-react"
 
 export default function SettingsPage() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const { theme, setTheme } = useTheme()
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [darkMode, setDarkMode] = useState(false)
   const [reminderTime, setReminderTime] = useState("")
   const [reminderEnabled, setReminderEnabled] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     if (!user) return
     const load = async () => {
       const p = await getUserProfile(user.uid)
-      if (!p) { setLoading(false); return }
-      setProfile(p)
-      setDarkMode(!!p.darkMode)
-      setReminderTime(p.reminderTime ?? "")
-      setReminderEnabled(!!p.reminderEnabled)
+      if (p) {
+        setProfile(p)
+        setReminderTime(p.reminderTime ?? "")
+        setReminderEnabled(!!p.reminderEnabled)
+      }
       setLoading(false)
     }
     load()
@@ -34,84 +35,173 @@ export default function SettingsPage() {
 
   const save = async () => {
     if (!user || !profile) return
+    setLoading(true)
     await setUserProfile(user.uid, {
-      darkMode,
       reminderEnabled,
       reminderTime: reminderEnabled ? reminderTime : "",
     })
-    setLoading(true)
-    setTimeout(() => setLoading(false), 600)
+    setLoading(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2200)
   }
 
-  const toggleTheme = () => setDarkMode(!darkMode)
-
-  if (loading) return <div className="flex min-h-screen items-center justify-center bg-slate-50">Loading…</div>
+  if (loading && !profile) {
+    return (
+      <div className="flex min-h-[calc(100vh-56px)] items-center justify-center">
+        <div
+          className="h-10 w-10 animate-spin rounded-full border-4 border-transparent"
+          style={{ borderTopColor: "var(--c-primary)" }}
+        />
+      </div>
+    )
+  }
   if (!user) return null
 
   return (
-    <div className="flex min-h-[calc(100vh-64px)] flex-col bg-slate-50 px-4 safe-area-pad-bottom">
-      <Header />
-      <main className="flex-1 px-4 py-6 space-y-6">
-        <h2 className="text-2xl font-bold text-slate-900">You</h2>
+    <div className="mx-auto max-w-lg px-4 py-5 pb-10">
+      <h1 className="mb-5 text-2xl font-black tracking-tight" style={{ color: "var(--c-text)" }}>
+        You
+      </h1>
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Dark mode</p>
-              <p className="text-sm text-slate-600">Light by default, dark when you want.</p>
-            </div>
+      {/* Profile */}
+      <div
+        className="mb-4 flex items-center gap-4 rounded-3xl border-2 p-5"
+        style={{ backgroundColor: "var(--c-surface)", borderColor: "var(--c-border)" }}
+      >
+        <div
+          className="flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black"
+          style={{ backgroundColor: "var(--c-primary-soft)", color: "var(--c-primary-dark)" }}
+        >
+          {(profile?.displayName || user.email || "U").charAt(0).toUpperCase()}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-base font-black" style={{ color: "var(--c-text)" }}>
+            {profile?.displayName || "Athlete"}
+          </p>
+          <p className="truncate text-xs font-semibold" style={{ color: "var(--c-muted)" }}>
+            {user.email}
+          </p>
+        </div>
+      </div>
+
+      {/* Appearance */}
+      <Section title="Appearance" icon={<Moon className="h-4 w-4" />}>
+        <div className="flex gap-2">
+          {(["light", "dark", "system"] as const).map((t) => (
             <button
-              onClick={toggleTheme}
-              className="relative w-14 h-7 rounded-full border border-slate-200 bg-slate-200 transition-colors focus:outline-none"
+              key={t}
+              onClick={() => setTheme(t)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl border-2 py-2.5 text-xs font-extrabold capitalize transition-colors active:scale-95"
+              style={{
+                backgroundColor: theme === t ? "var(--c-primary)" : "var(--c-surface-2)",
+                borderColor: theme === t ? "transparent" : "var(--c-border)",
+                color: theme === t ? "#fff" : "var(--c-muted)",
+              }}
             >
-              <span className={`block w-5 h-5 rounded-full bg-white shadow-md absolute ${darkMode ? "right-2" : "left-2"} top-0.5 transition-transform`}></span>
+              {t === "light" && <Sun className="h-3.5 w-3.5" />}
+              {t === "dark" && <Moon className="h-3.5 w-3.5" />}
+              {t === "system" && <span className="text-xs">auto</span>}
+              {t}
             </button>
-          </div>
-
-          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Reminder</p>
-              <p className="text-sm text-slate-600">Daily nudge if goals aren't done.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                className="rounded border-slate-300 bg-slate-50 text-emerald-600 focus:ring-emerald-500"
-                checked={reminderEnabled}
-                onChange={(e) => setReminderEnabled(e.target.checked)}
-              />
-              <input
-                type="time"
-                className="input w-28"
-                disabled={!reminderEnabled}
-                value={reminderTime}
-                onChange={(e) => setReminderTime(e.target.value)}
-              />
-            </div>
-          </div>
+          ))}
         </div>
+      </Section>
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-bold text-slate-900 mb-3">Streak milestones</h3>
-          <div className="grid gap-2">
-            {STREAK_MILESTONES.map((m) => {
-              const hit = (profile?.milestones ?? []).includes(m.days)
-              return (
-                <div key={m.days} className={`flex items-center justify-between px-3 py-2 rounded-xl border ${hit ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"}`}>
-                  <span className="text-sm text-slate-600">{m.label} ({m.days} days)</span>
-                  <span className={`text-xs font-bold ${hit ? "text-emerald-600" : "text-slate-400"}`}>
-                    {hit ? "Achieved" : "Locked"}
+      {/* Reminders */}
+      <Section title="Daily reminder" icon={<Bell className="h-4 w-4" />}>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold" style={{ color: "var(--c-muted)" }}>
+            Nudge me if goals aren&apos;t done
+          </p>
+          <button
+            onClick={() => setReminderEnabled(!reminderEnabled)}
+            aria-label="Toggle reminders"
+            className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
+            style={{ backgroundColor: reminderEnabled ? "var(--c-primary)" : "var(--c-border)" }}
+          >
+            <span
+              className="absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all"
+              style={{ left: reminderEnabled ? 26 : 4 }}
+            />
+          </button>
+        </div>
+        {reminderEnabled && (
+          <div className="mt-3">
+            <label className="label">Reminder time (your local time)</label>
+            <Input
+              type="time"
+              value={reminderTime}
+              onChange={(e) => setReminderTime(e.target.value)}
+            />
+          </div>
+        )}
+      </Section>
+
+      {/* Milestones */}
+      <Section title="Streak milestones" icon={<Trophy className="h-4 w-4" />}>
+        <div className="space-y-2">
+          {STREAK_MILESTONES.map((m) => {
+            const hit = (profile?.milestones ?? []).includes(m.days)
+            return (
+              <div
+                key={m.days}
+                className="flex items-center justify-between rounded-2xl border-2 px-4 py-3"
+                style={{
+                  backgroundColor: hit ? "var(--c-primary-soft)" : "var(--c-surface-2)",
+                  borderColor: hit ? "transparent" : "var(--c-border)",
+                }}
+              >
+                <span className="text-sm font-bold" style={{ color: "var(--c-text)" }}>
+                  {m.label} · {m.days} days
+                </span>
+                {hit ? (
+                  <span className="flex items-center gap-1 text-xs font-black" style={{ color: "var(--c-primary-dark)" }}>
+                    <Check className="h-3.5 w-3.5" /> Achieved
                   </span>
-                </div>
-              )
-            })}
-          </div>
+                ) : (
+                  <span className="text-xs font-black" style={{ color: "var(--c-faint)" }}>
+                    Locked
+                  </span>
+                )}
+              </div>
+            )
+          })}
         </div>
+      </Section>
 
-        <Button variant="primary" className="w-full" onClick={save} disabled={loading}>
-          {loading ? "Saving…" : "Save changes"}
-        </Button>
-      </main>
+      <Button variant="primary" block onClick={save} disabled={loading}>
+        {saved ? "Saved!" : loading ? "Saving…" : "Save changes"}
+      </Button>
+
+      <Button variant="outline" block className="mt-3" onClick={logout}>
+        <LogOut className="h-4 w-4" /> Sign out
+      </Button>
     </div>
+  )
+}
+
+function Section({
+  title,
+  icon,
+  children,
+}: {
+  title: string
+  icon: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <section
+      className="mb-4 rounded-3xl border-2 p-5"
+      style={{ backgroundColor: "var(--c-surface)", borderColor: "var(--c-border)" }}
+    >
+      <h2
+        className="mb-3 flex items-center gap-2 text-sm font-extrabold"
+        style={{ color: "var(--c-text)" }}
+      >
+        <span style={{ color: "var(--c-primary)" }}>{icon}</span>
+        {title}
+      </h2>
+      {children}
+    </section>
   )
 }

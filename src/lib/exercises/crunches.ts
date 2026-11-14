@@ -5,6 +5,7 @@ export const crunches: ExerciseConfig = baseExercise({
   id: "crunches",
   name: "Crunches",
   trackedLandmarks: [11, 12, 23, 24, 25, 26],
+  requiredLandmarks: [11, 12, 23, 24],
   cameraAngle: "side",
   downThreshold: 150,
   upThreshold: 100,

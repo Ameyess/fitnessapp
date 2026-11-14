@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { AnimatePresence, motion } from "framer-motion"
 
 export interface Toast {
   id: string
@@ -24,40 +25,70 @@ const ToastContext = React.createContext<ToastContextType>({
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = React.useState<Toast[]>([])
 
-  const add = (toast: Omit<Toast, "id">) => {
+  const add = React.useCallback((toast: Omit<Toast, "id">) => {
     const id = Math.random().toString(36).slice(2)
-    setToasts((prev) => [...prev, { ...toast, id }])
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000)
-  }
+    setToasts((prev) => [...prev.slice(-2), { ...toast, id }])
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3200)
+  }, [])
 
-  const remove = (id: string) => {
+  const remove = React.useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
+  }, [])
+
+  const palette: Record<string, { bg: string; fg: string; icon: string }> = {
+    success: { bg: "var(--c-primary-soft)", fg: "var(--c-primary-dark)", icon: "✓" },
+    error: { bg: "var(--c-danger-soft)", fg: "var(--c-danger)", icon: "✕" },
+    info: { bg: "var(--c-blue-soft)", fg: "var(--c-blue)", icon: "ℹ" },
   }
 
   return (
     <ToastContext.Provider value={{ toasts, add, remove }}>
       {children}
-      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className="pointer-events-auto flex w-full max-w-xs items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl"
-          >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === "success" ? "bg-emerald-100 text-emerald-600" : t.type === "error" ? "bg-rose-100 text-rose-600" : "bg-blue-100 text-blue-600"}`}>
-              {t.type === "success" ? "✓" : t.type === "error" ? "✕" : "ℹ"}
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-slate-900">{t.title}</h4>
-              {t.description && <p className="text-xs text-slate-500">{t.description}</p>}
-            </div>
-            <button
-              onClick={() => remove(t.id)}
-              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
+      <div className="pointer-events-none fixed inset-x-0 top-3 z-50 flex flex-col items-center gap-2 px-4 safe-area-pad-top">
+        <AnimatePresence>
+          {toasts.map((t) => {
+            const p = palette[t.type]
+            return (
+              <motion.div
+                key={t.id}
+                initial={{ opacity: 0, y: -20, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -12, scale: 0.94 }}
+                transition={{ type: "spring", stiffness: 420, damping: 28 }}
+                className="pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-2xl border-2 p-3"
+                style={{
+                  backgroundColor: "var(--c-surface)",
+                  borderColor: "var(--c-border)",
+                }}
+              >
+                <div
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base font-black"
+                  style={{ backgroundColor: p.bg, color: p.fg }}
+                >
+                  {p.icon}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="truncate text-sm font-extrabold" style={{ color: "var(--c-text)" }}>
+                    {t.title}
+                  </h4>
+                  {t.description && (
+                    <p className="truncate text-xs font-semibold" style={{ color: "var(--c-muted)" }}>
+                      {t.description}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => remove(t.id)}
+                  aria-label="Dismiss"
+                  className="shrink-0 text-lg font-bold"
+                  style={{ color: "var(--c-faint)" }}
+                >
+                  ×
+                </button>
+              </motion.div>
+            )
+          })}
+        </AnimatePresence>
       </div>
     </ToastContext.Provider>
   )

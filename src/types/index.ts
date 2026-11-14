@@ -12,7 +12,11 @@ export interface ExerciseConfig {
   id: ExerciseId
   name: string
   type: "rep" | "timed"
+  /** All landmarks the exercise cares about (used for drawing / angle maths) */
   trackedLandmarks: number[]
+  /** The small set that MUST be visible for the pose to count as "in frame".
+   *  Kept tight so a slightly cropped foot doesn't block the whole workout. */
+  requiredLandmarks: number[]
   cameraAngle: "front" | "side"
   mirrorFrontCamera: boolean
   downThreshold: number

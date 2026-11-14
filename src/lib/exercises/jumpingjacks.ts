@@ -5,6 +5,7 @@ export const jumpingjacks: ExerciseConfig = baseExercise({
   id: "jumpingjacks",
   name: "Jumping Jacks",
   trackedLandmarks: [11, 12, 15, 16, 27, 28],
+  requiredLandmarks: [11, 12, 15, 16],
   cameraAngle: "front",
   mirrorFrontCamera: true,
   downThreshold: 150,

@@ -12,78 +12,90 @@ export function Input({ label, error, className, ...props }: InputProps) {
     <div className="mb-4">
       {label && <label className="label">{label}</label>}
       <input
-        className={`input ${error ? "border-rose-500 focus:ring-rose-200" : ""} ${className ?? ""}`}
+        className={`input ${error ? "border-[var(--c-danger)]" : ""} ${className ?? ""}`}
         {...props}
       />
-      {error && <span className="text-xs text-rose-600 mt-1 block">{error}</span>}
+      {error && (
+        <span className="mt-1 block text-xs font-bold" style={{ color: "var(--c-danger)" }}>
+          {error}
+        </span>
+      )}
     </div>
   )
 }
 
-interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: "default" | "emerald" | "flame"
+export function Badge({
+  variant = "default",
+  children,
+  className,
+}: {
+  variant?: "default" | "primary" | "flame"
   children: React.ReactNode
-}
-
-export function Badge({ variant = "default", children, className }: BadgeProps) {
+  className?: string
+}) {
   const variants: Record<string, string> = {
-    default: "border-slate-200 bg-slate-100 text-slate-600",
-    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    flame: "border-flame-200 bg-flame-50 text-flame-700",
+    default: "badge",
+    primary: "badge-primary",
+    flame: "badge-flame",
   }
-  return (
-    <span className={`inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-0.5 text-xs font-semibold text-slate-600 ${variants[variant]} ${className ?? ""}`}>
-      {children}
-    </span>
-  )
+  return <span className={`${variants[variant]} ${className ?? ""}`}>{children}</span>
 }
 
-interface EmptyStateProps {
+export function EmptyState({
+  title,
+  description,
+  icon,
+  action,
+}: {
   title: string
   description: string
   icon?: React.ReactNode
   action?: React.ReactNode
-}
-
-export function EmptyState({ title, description, icon, action }: EmptyStateProps) {
+}) {
   return (
-    <div className="flex flex-col items-center justify-center text-center py-20 px-6">
-      {icon && <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4 text-slate-400">{icon}</div>}
-      <h3 className="text-xl font-bold text-slate-900 mb-2">{title}</h3>
-      <p className="text-slate-500 mb-6 max-w-xs">{description}</p>
+    <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+      {icon && (
+        <div
+          className="mb-4 flex h-16 w-16 items-center justify-center rounded-full"
+          style={{ backgroundColor: "var(--c-surface-2)", color: "var(--c-faint)" }}
+        >
+          {icon}
+        </div>
+      )}
+      <h3 className="mb-2 text-xl font-black" style={{ color: "var(--c-text)" }}>
+        {title}
+      </h3>
+      <p className="mb-6 max-w-xs text-sm" style={{ color: "var(--c-muted)" }}>
+        {description}
+      </p>
       {action}
     </div>
   )
 }
 
-interface LoadingSpinnerProps {
+export function LoadingSpinner({
+  className,
+  size = "md",
+}: {
   className?: string
   size?: "sm" | "md" | "lg"
-}
-
-export function LoadingSpinner({ className, size = "md" }: LoadingSpinnerProps) {
-  const sizes: Record<string, string> = { sm: "w-5 h-5", md: "w-8 h-8", lg: "w-12 h-12" }
+}) {
+  const sizes: Record<string, string> = { sm: "h-5 w-5", md: "h-8 w-8", lg: "h-12 w-12" }
   return (
     <div className={`flex items-center justify-center ${sizes[size]} ${className ?? ""}`}>
       <svg
-        className="animate-spin h-full w-full text-slate-300"
+        className="h-full w-full animate-spin"
+        style={{ color: "var(--c-primary)" }}
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"
       >
-        <circle
-          className="opacity-25"
-          cx="12"
-          cy="12"
-          r="10"
-          stroke="currentColor"
-          strokeWidth="4"
-        ></circle>
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
         <path
           className="opacity-75"
           fill="currentColor"
           d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.96 7.96 0 004 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-        ></path>
+        />
       </svg>
     </div>
   )

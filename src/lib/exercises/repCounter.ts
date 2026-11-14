@@ -34,7 +34,9 @@ export function createRepCounter(config: ExerciseConfig) {
 
     update({ config, landmarks, now }: RepCounterInput): RepCounterState {
       const minConf = config.minConfidence ?? 0.5
-      const visible = landmarks && landmarksVisible(landmarks, config.trackedLandmarks, minConf)
+      const required = config.requiredLandmarks ?? config.trackedLandmarks
+      const visible =
+        landmarks && landmarksVisible(landmarks, required, minConf)
 
       if (!visible) {
         state = { ...state, inFrame: false, angle: null, phase: "resting" }

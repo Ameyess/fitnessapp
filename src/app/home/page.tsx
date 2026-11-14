@@ -1,66 +1,40 @@
 "use client"
 
 import * as React from "react"
-import { useAuth } from "@/hooks/useAuth"
-import { useEffect, useState } from "react"
-import { createUserProfile, getUserProfile, getWorkouts, todayKey } from "@/lib/db"
-import { ALL_EXERCISES, type ExerciseId, UserProfile } from "@/types"
-import { getExercise } from "@/lib/exercises"
-import { StreakFlame, ProgressBar } from "@/components/ui/StreakFlame"
-import { Button } from "@/components/ui/Button"
 import Link from "next/link"
-import { Play, CheckCircle2 } from "lucide-react"
+import { useAuth } from "@/hooks/useAuth"
+import { useProfileLoader } from "@/hooks/useProfile"
+import { ALL_EXERCISES, type ExerciseId } from "@/types"
+import { getExercise } from "@/lib/exercises"
+import { ProgressBar, ProgressRing } from "@/components/ui/StreakFlame"
+import { Button } from "@/components/ui/Button"
+import { motion } from "framer-motion"
+import { Play, CheckCircle2, ChevronRight, Dumbbell } from "lucide-react"
 
 export default function HomePage() {
   const { user } = useAuth()
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [workouts, setWorkouts] = useState<Record<ExerciseId, any>>({} as any)
-
-  useEffect(() => {
-    if (!user) return
-    let cancelled = false
-    const load = async () => {
-      try {
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-        const existing = await getUserProfile(user.uid)
-        if (!existing) {
-          const created = await createUserProfile(user.uid, user.email, user.displayName)
-          if (cancelled) return
-          setProfile(created)
-        } else {
-          setProfile(existing)
-        }
-        const date = todayKey((existing?.timezone ?? tz))
-        const logs = await getWorkouts(user.uid, date)
-        const byExercise: Record<ExerciseId, any> = {} as any
-        logs.forEach((l) => { byExercise[l.exerciseId] = l })
-        setWorkouts(byExercise)
-      } catch (e: any) {
-        console.error("Failed to load profile", e)
-        if (!cancelled) setError(e?.message ?? "Failed to load your profile")
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => { cancelled = true }
-  }, [user])
+  const { profile, workouts, loading, error } = useProfileLoader()
 
   if (loading) {
     return (
-      <div className="flex min-h-[calc(100vh-64px)] items-center justify-center bg-slate-50 px-4">
-        <div className="text-slate-500">Loading your streak…</div>
+      <div className="flex min-h-[calc(100vh-56px)] items-center justify-center">
+        <div
+          className="h-10 w-10 animate-spin rounded-full border-4 border-transparent"
+          style={{ borderTopColor: "var(--c-primary)" }}
+        />
       </div>
     )
   }
 
-  if (error) {
+  if (error && !profile) {
     return (
-      <div className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-center bg-slate-50 px-6 text-center">
-        <h2 className="text-xl font-bold text-slate-900 mb-2">Could not load your profile</h2>
-        <p className="text-slate-500 mb-4 text-sm">{error}</p>
+      <div className="flex min-h-[calc(100vh-56px)] flex-col items-center justify-center px-6 text-center">
+        <h2 className="mb-2 text-xl font-black" style={{ color: "var(--c-text)" }}>
+          Could not load your profile
+        </h2>
+        <p className="mb-6 max-w-xs text-sm" style={{ color: "var(--c-muted)" }}>
+          {error}
+        </p>
         <Button variant="primary" onClick={() => window.location.reload()}>
           Try again
         </Button>
@@ -70,9 +44,14 @@ export default function HomePage() {
 
   if (!profile) {
     return (
-      <div className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-center bg-slate-50 px-6 text-center">
-        <h2 className="text-xl font-bold text-slate-900 mb-2">No profile yet</h2>
-        <p className="text-slate-500 mb-4 text-sm">Set up your daily goals to start your streak.</p>
+      <div className="flex min-h-[calc(100vh-56px)] flex-col items-center justify-center px-6 text-center">
+        <div className="mb-4 text-5xl">🎯</div>
+        <h2 className="mb-2 text-xl font-black" style={{ color: "var(--c-text)" }}>
+          Let&apos;s set up your goals
+        </h2>
+        <p className="mb-6 max-w-xs text-sm" style={{ color: "var(--c-muted)" }}>
+          Pick a daily goal for each exercise to start your streak.
+        </p>
         <Link href="/onboarding">
           <Button variant="primary">Start onboarding</Button>
         </Link>
@@ -80,115 +59,175 @@ export default function HomePage() {
     )
   }
 
-  const date = todayKey(profile.timezone)
-  const allDone = Object.values(workouts).every((w) => w.completed)
-  const anyDone = Object.values(workouts).some((w) => (w.reps || 0) > 0 || (w.seconds || 0) > 0)
+  const goals = ALL_EXERCISES.map((exId) => {
+    const ex = getExercise(exId)
+    const goal = profile.goals[exId]
+    const enabled = goal?.enabled ?? true
+    const target = ex?.type === "rep" ? (goal?.reps ?? 10) : (goal?.seconds ?? 30)
+    const w = workouts[exId]
+    const current = ex?.type === "rep" ? (w?.reps ?? 0) : (w?.seconds ?? 0)
+    return { exId, ex, enabled, target, current, done: !!w?.completed }
+  })
+
+  const activeGoals = goals.filter((g) => g.enabled)
+  const doneGoals = activeGoals.filter((g) => g.done)
+  const allDone = activeGoals.length > 0 && doneGoals.length === activeGoals.length
+  const totalReps = goals.reduce(
+    (sum, g) => sum + (g.ex?.type === "rep" ? g.current : 0),
+    0
+  )
 
   return (
-    <div className="flex min-h-[calc(100vh-64px)] flex-col bg-slate-50">
-      <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 safe-area-pad-top">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">💪</span>
-            <span className="text-xl font-black text-slate-900 tracking-tight">FitStreak</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <StreakFlame count={profile.streak} longest={profile.longestStreak} size="lg" />
-        </div>
-      </header>
-
-      <main className="flex-1 px-4 py-4 space-y-4 safe-area-pad-bottom">
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex-1">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Today's streak</p>
-              <div className="flex items-center gap-2 mt-1">
-                <StreakFlame count={profile.streak} longest={profile.longestStreak} size="md" />
-                <span className="text-sm text-slate-500">
-                  {profile.streak === 0 ? "Start today!" : "Keep it going"}
+    <div className="min-h-[calc(100vh-56px)] pb-10">
+      <main className="mx-auto max-w-3xl px-4 py-5">
+        {/* Streak hero */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-5 overflow-hidden rounded-3xl border-2"
+          style={{
+            backgroundColor: "var(--c-surface)",
+            borderColor: "var(--c-border)",
+          }}
+        >
+          <div className="flex items-center gap-4 p-5">
+            <ProgressRing value={doneGoals.length} max={activeGoals.length || 1} size={92} color="flame">
+              <span className="text-2xl leading-none">🔥</span>
+              <span
+                className="text-2xl font-black tabular-nums leading-none"
+                style={{ color: "var(--c-text)" }}
+              >
+                {profile.streak}
+              </span>
+            </ProgressRing>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl font-black leading-tight" style={{ color: "var(--c-text)" }}>
+                {profile.streak === 0 ? "Start your streak today!" : "Keep it going!"}
+              </h1>
+              <p className="text-sm font-bold" style={{ color: "var(--c-muted)" }}>
+                {profile.streak} day{profile.streak === 1 ? "" : "s"} in a row · best{" "}
+                {profile.longestStreak}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <span className="chip">
+                  {doneGoals.length}/{activeGoals.length} goals
                 </span>
+                <span className="chip">{totalReps} reps today</span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-3xl font-black text-flame-600">{profile.streak}</span>
-              <span className="text-xs text-slate-500">day{profile.streak !== 1 ? "s" : ""}</span>
-            </div>
           </div>
-        </div>
 
-        <section className="flex flex-col gap-3">
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <span className="w-5 h-5 text-flame-500">🔥</span> Today's goals
-          </h3>
-          <div className="grid gap-3">
-            {ALL_EXERCISES.map((exId) => {
-              const ex = getExercise(exId)
-              const w = workouts[exId]
-              const goal = profile.goals[exId]
-              const enabled = goal?.enabled ?? true
-              const target = ex?.type === "rep" ? (goal?.reps ?? 10) : (goal?.seconds ?? 30)
-              const done = w?.completed ?? false
-              const current = ex?.type === "rep" ? (w?.reps ?? 0) : (w?.seconds ?? 0)
-              return (
-                <ExerciseGoalCard key={exId} ex={ex} goal={target} current={current} done={done} enabled={enabled} />
-              )
-            })}
-          </div>
-          {allDone && Object.keys(workouts).length > 0 && (
-            <div className="mt-2 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700 text-sm font-semibold">
-              <CheckCircle2 className="w-4 h-4" /> Nice one! Streak extended!
+          {allDone && (
+            <div
+              className="flex items-center justify-center gap-2 border-t-2 px-4 py-3 text-sm font-extrabold"
+              style={{
+                backgroundColor: "var(--c-primary-soft)",
+                borderColor: "transparent",
+                color: "var(--c-primary-dark)",
+              }}
+            >
+              <CheckCircle2 className="h-4 w-4" /> Streak extended! Nice one!
             </div>
           )}
-          {!allDone && anyDone && (
-            <p className="text-sm text-slate-500">Keep going to keep your streak alive.</p>
-          )}
+        </motion.section>
+
+        {/* Today's goals */}
+        <section className="mb-6">
+          <h2 className="mb-3 text-lg font-black" style={{ color: "var(--c-text)" }}>
+            Today&apos;s goals
+          </h2>
+          <div className="space-y-2.5">
+            {goals.map((g, i) => (
+              <motion.div
+                key={g.exId}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+              >
+                <Link href={`/exercises/${g.exId}`}>
+                  <div
+                    className="flex items-center gap-3 rounded-2xl border-2 p-3.5 transition-colors active:scale-[0.99]"
+                    style={{
+                      backgroundColor: g.done ? "var(--c-primary-soft)" : "var(--c-surface)",
+                      borderColor: g.done ? "transparent" : "var(--c-border)",
+                    }}
+                  >
+                    <div
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg"
+                      style={{
+                        backgroundColor: g.done ? "var(--c-primary)" : "var(--c-surface-2)",
+                      }}
+                    >
+                      {g.done ? "✓" : "🏋️"}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                        <span className="truncate text-sm font-extrabold" style={{ color: "var(--c-text)" }}>
+                          {g.ex?.name}
+                        </span>
+                        <span
+                          className="shrink-0 text-xs font-extrabold tabular-nums"
+                          style={{ color: g.done ? "var(--c-primary-dark)" : "var(--c-muted)" }}
+                        >
+                          {g.current}/{g.target}
+                        </span>
+                      </div>
+                      <ProgressBar
+                        value={g.current}
+                        max={g.target}
+                        color={g.done ? "primary" : "flame"}
+                      />
+                    </div>
+                    <ChevronRight className="h-5 w-5 shrink-0" style={{ color: "var(--c-faint)" }} />
+                  </div>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
         </section>
 
-        <section className="flex flex-col gap-3">
-          <h3 className="text-lg font-bold text-slate-900">Quick start</h3>
-          <div className="grid grid-cols-2 gap-3">
+        {/* Quick start */}
+        <section>
+          <h2 className="mb-3 text-lg font-black" style={{ color: "var(--c-text)" }}>
+            Quick start
+          </h2>
+          <div className="grid grid-cols-2 gap-2.5">
             {ALL_EXERCISES.map((exId) => {
               const ex = getExercise(exId)
+              const done = goals.find((g) => g.exId === exId)?.done
               return (
-                <Link key={exId} href={`/exercises/${exId}`} className="block">
-                  <Button variant="primary" className="w-full justify-between">
-                    <span>{ex?.name}</span>
-                    <Play className="w-4 h-4" />
-                  </Button>
+                <Link key={exId} href={`/exercises/${exId}`}>
+                  <div
+                    className="flex items-center justify-between rounded-2xl border-2 px-4 py-3 transition-transform active:scale-95"
+                    style={{
+                      backgroundColor: done ? "var(--c-primary-soft)" : "var(--c-surface)",
+                      borderColor: done ? "transparent" : "var(--c-border)",
+                    }}
+                  >
+                    <span className="truncate text-sm font-extrabold" style={{ color: "var(--c-text)" }}>
+                      {ex?.name}
+                    </span>
+                    <Play className="h-4 w-4 shrink-0" style={{ color: "var(--c-primary)" }} />
+                  </div>
                 </Link>
               )
             })}
           </div>
+
+          <Link href="/history" className="mt-3 block">
+            <div
+              className="flex items-center justify-between rounded-2xl border-2 px-4 py-3 transition-transform active:scale-95"
+              style={{ backgroundColor: "var(--c-surface)", borderColor: "var(--c-border)" }}
+            >
+              <span className="flex items-center gap-2 text-sm font-extrabold" style={{ color: "var(--c-text)" }}>
+                <Dumbbell className="h-4 w-4" style={{ color: "var(--c-blue)" }} />
+                View your progress
+              </span>
+              <ChevronRight className="h-5 w-5" style={{ color: "var(--c-faint)" }} />
+            </div>
+          </Link>
         </section>
       </main>
     </div>
-  )
-}
-
-interface ExerciseGoalCardProps {
-  ex: any
-  goal: number
-  current: number
-  done: boolean
-  enabled: boolean
-}
-
-function ExerciseGoalCard({ ex, goal, current, done, enabled }: ExerciseGoalCardProps) {
-  const pct = Math.min(100, Math.max(0, (current / goal) * 100))
-  return (
-    <Link href={`/exercises/${ex.id}`} className="group block">
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-emerald-200 transition-colors">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-semibold text-slate-900">{ex.name}</span>
-          {done && <span className="text-emerald-600 text-xs font-bold">✓ Done</span>}
-        </div>
-        <ProgressBar value={current} max={goal} color="emerald" />
-        <div className="flex justify-between text-xs mt-1">
-          <span className="text-slate-500">{current} / {goal}</span>
-          <span className="text-slate-400">{enabled ? "active" : "paused"}</span>
-        </div>
-      </div>
-    </Link>
   )
 }

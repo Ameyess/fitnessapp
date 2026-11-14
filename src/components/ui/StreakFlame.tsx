@@ -1,89 +1,85 @@
 "use client"
 
-import { motion } from "framer-motion"
 import * as React from "react"
+import { motion } from "framer-motion"
 
 interface StreakFlameProps {
   count: number
   longest?: number
-  className?: string
   size?: "sm" | "md" | "lg"
+  className?: string
 }
 
-const sizes: Record<string, string> = {
-  sm: "w-8 h-8 text-[1rem] leading-none",
-  md: "w-12 h-12 text-[1.5rem] leading-none",
-  lg: "w-16 h-16 text-[2.25rem] leading-none",
-}
-
-export function StreakFlame({ count, longest, className, size = "md" }: StreakFlameProps) {
-  return (
-    <motion.span
-      whileHover={{ scale: 1.1 }}
-      whileTap={{ scale: 0.9 }}
-      className={`inline-flex items-center justify-center rounded-full border border-flame-200 bg-flame-50 px-3 py-1 font-bold text-flame-700 shadow-sm ${sizes[size]} ${className ?? ""}`}
+export function StreakFlame({ count, longest, size = "md", className }: StreakFlameProps) {
+  const flame = (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border-2 font-extrabold ${className ?? ""}`}
+      style={{
+        backgroundColor: "var(--c-surface)",
+        borderColor: "var(--c-flame)",
+        color: "var(--c-flame)",
+      }}
     >
-      🔥 {count}
+      <span aria-hidden>🔥</span>
+      <span className="tabular-nums">{count}</span>
       {longest != null && longest > count && (
-        <span className="ml-1 text-[0.6em] opacity-70">best {longest}</span>
+        <span className="text-[0.65em] font-bold opacity-70">best {longest}</span>
       )}
-    </motion.span>
+    </span>
   )
+  if (size === "sm") return <span className="text-sm">{flame}</span>
+  return flame
 }
 
 interface ProgressRingProps {
   value: number
   max: number
-  className?: string
   size?: number
-  color?: "emerald" | "flame" | "blue"
+  color?: "primary" | "flame" | "blue"
+  children?: React.ReactNode
 }
 
-export function ProgressRing({ value, max, className, size = 110, color = "emerald" }: ProgressRingProps) {
-  const pct = Math.min(100, Math.max(0, (value / max) * 100))
-  const strokeDasharray = 283
-  const offset = strokeDasharray - (pct / 100) * strokeDasharray
+export function ProgressRing({
+  value,
+  max,
+  size = 120,
+  color = "primary",
+  children,
+}: ProgressRingProps) {
+  const pct = Math.min(100, Math.max(0, max > 0 ? (value / max) * 100 : 0))
+  const r = (size - 14) / 2
+  const circ = 2 * Math.PI * r
+  const offset = circ - (pct / 100) * circ
   const colors: Record<string, string> = {
-    emerald: "stroke-emerald-500",
-    flame: "stroke-flame-500",
-    blue: "stroke-blue-500",
+    primary: "var(--c-primary)",
+    flame: "var(--c-flame)",
+    blue: "var(--c-blue)",
   }
   return (
     <div className="relative" style={{ width: size, height: size }}>
-      <svg
-        className="block w-full h-full transform -rotate-90"
-        width={size}
-        height={size}
-      >
+      <svg width={size} height={size} className="-rotate-90">
         <circle
           cx={size / 2}
           cy={size / 2}
-          r={(size - 16) / 2}
+          r={r}
           fill="none"
-          stroke="slate-100"
+          stroke="var(--c-border)"
           strokeWidth="10"
         />
         <circle
           cx={size / 2}
           cy={size / 2}
-          r={(size - 16) / 2}
+          r={r}
           fill="none"
           stroke={colors[color]}
           strokeWidth="10"
           strokeLinecap="round"
-          strokeDasharray={strokeDasharray}
+          strokeDasharray={circ}
           strokeDashoffset={offset}
-          className="transition-all duration-700 ease-out"
+          style={{ transition: "stroke-dashoffset 0.7s cubic-bezier(0.22,1,0.36,1)" }}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-          {Math.round(pct)}%
-        </span>
-        <span className="text-sm font-bold text-slate-900">
-          {value} / {max}
-        </span>
-      </div>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">{children}</div>
     </div>
   )
 }
@@ -92,21 +88,33 @@ interface ProgressBarProps {
   value: number
   max: number
   className?: string
-  color?: "emerald" | "flame" | "blue"
+  color?: "primary" | "flame" | "blue"
 }
 
-export function ProgressBar({ value, max, className, color = "emerald" }: ProgressBarProps) {
-  const pct = Math.min(100, Math.max(0, (value / max) * 100))
+export function ProgressBar({
+  value,
+  max,
+  className,
+  color = "primary",
+}: ProgressBarProps) {
+  const pct = Math.min(100, Math.max(0, max > 0 ? (value / max) * 100 : 0))
   const colors: Record<string, string> = {
-    emerald: "bg-emerald-500",
-    flame: "bg-flame-500",
-    blue: "bg-blue-500",
+    primary: "var(--c-primary)",
+    flame: "var(--c-flame)",
+    blue: "var(--c-blue)",
   }
   return (
-    <div className={`w-full h-3 rounded-full border border-slate-200 bg-slate-100 overflow-hidden ${className ?? ""}`}>
+    <div
+      className={`h-3 w-full overflow-hidden rounded-full border ${className ?? ""}`}
+      style={{ backgroundColor: "var(--c-surface-2)", borderColor: "var(--c-border)" }}
+    >
       <div
-        className={`h-full ${colors[color]} transition-all duration-700 ease-out`}
-        style={{ width: `${pct}%` }}
+        className="h-full rounded-full"
+        style={{
+          width: `${pct}%`,
+          backgroundColor: colors[color],
+          transition: "width 0.7s cubic-bezier(0.22,1,0.36,1)",
+        }}
       />
     </div>
   )
