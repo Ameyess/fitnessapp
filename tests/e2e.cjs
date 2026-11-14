@@ -304,6 +304,86 @@ async function main() {
     !!counterColor && /255/.test(counterColor),
     `color=${counterColor}`
   )
+  /* ---------- 2e. Overlay is aligned with the rendered video ---------- */
+  const alignment = await page.evaluate(() => {
+    const canvas = document.querySelector("canvas")
+    const video = document.querySelector("video")
+    if (!canvas || !video) return { skipped: true }
+    const ctx = canvas.getContext("2d")
+    const { width, height } = canvas
+    const d = ctx.getImageData(0, 0, width, height).data
+    let minX = 1e9,
+      maxX = -1,
+      minY = 1e9,
+      maxY = -1
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4
+        if (
+          d[i + 3] > 40 &&
+          d[i + 1] > 140 &&
+          d[i] < 160 &&
+          d[i + 2] < 110 &&
+          d[i + 1] > d[i] + 40
+        ) {
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+          if (y < minY) minY = y
+          if (y > maxY) maxY = y
+        }
+      }
+    }
+    if (maxX < 0) return { skipped: true }
+
+    const dpr = width / (canvas.clientWidth || 1)
+    // The rendered (letterboxed) video rect, computed exactly like the CSS
+    // object-fit: contain does.
+    const cw = canvas.clientWidth
+    const ch = canvas.clientHeight
+    const sw = video.videoWidth
+    const sh = video.videoHeight
+    const scale = Math.min(cw / sw, ch / sh)
+    const rw = sw * scale
+    const rh = sh * scale
+    const rect = {
+      left: (cw - rw) / 2,
+      right: (cw - rw) / 2 + rw,
+      top: (ch - rh) / 2,
+      bottom: (ch - rh) / 2 + rh,
+    }
+    const box = {
+      left: minX / dpr,
+      right: maxX / dpr,
+      top: minY / dpr,
+      bottom: maxY / dpr,
+    }
+    const inside =
+      box.left >= rect.left - 2 &&
+      box.right <= rect.right + 2 &&
+      box.top >= rect.top - 2 &&
+      box.bottom <= rect.bottom + 2
+    return {
+      skipped: false,
+      inside,
+      box,
+      rect,
+      fillW: (box.right - box.left) / rw,
+      fillH: (box.bottom - box.top) / rh,
+    }
+  })
+  record(
+    "markers land inside the rendered video area",
+    alignment.skipped || alignment.inside,
+    alignment.skipped
+      ? "no markers"
+      : `box=${JSON.stringify(alignment.box)} video=${JSON.stringify(alignment.rect)}`
+  )
+  record(
+    "markers cover a realistic portion of the frame",
+    alignment.skipped || (alignment.fillW > 0.2 && alignment.fillH > 0.3),
+    alignment.skipped ? "no markers" : `fill=${(alignment.fillW * 100).toFixed(0)}% x ${(alignment.fillH * 100).toFixed(0)}%`
+  )
+
   await page.screenshot({ path: path.join(SHOTS, "02-live-workout.png"), fullPage: true })
 
   /* ---------- 2b. Manual rep correction is not clobbered ---------- */

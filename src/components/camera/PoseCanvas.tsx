@@ -32,10 +32,12 @@ const JOINT_NAMES: Record<number, string> = {
 interface PoseCanvasProps {
   landmarks: Landmark[] | null
   /** The source media element - used to map normalized landmarks
-   *  onto the visible (object-cover cropped) area. */
+   *  onto the visible area. */
   video?: HTMLVideoElement | HTMLImageElement | null
   mirror?: boolean
   highlightJoints?: number[]
+  /** Must match the object-fit of the source element. */
+  fit?: "cover" | "contain"
 }
 
 /**
@@ -50,6 +52,7 @@ export function PoseCanvas({
   video,
   mirror = false,
   highlightJoints = [],
+  fit = "cover",
 }: PoseCanvasProps) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
 
@@ -72,7 +75,7 @@ export function PoseCanvas({
     ctx.clearRect(0, 0, cw, ch)
     if (!landmarks || landmarks.length === 0) return
 
-    // --- object-cover mapping ---
+    // --- video -> canvas mapping (must match the <video> CSS object-fit) ---
     const sw = (video as any)?.videoWidth || (video as any)?.naturalWidth || 0
     const sh = (video as any)?.videoHeight || (video as any)?.naturalHeight || 0
     let scale = 1
@@ -81,11 +84,21 @@ export function PoseCanvas({
     let ox = 0
     let oy = 0
     if (sw > 0 && sh > 0) {
-      scale = Math.max(cw / sw, ch / sh)
-      rw = sw * scale
-      rh = sh * scale
-      ox = (cw - rw) / 2
-      oy = (ch - rh) / 2
+      if (fit === "contain") {
+        // Letterbox: the whole video is visible, nothing is cropped away.
+        scale = Math.min(cw / sw, ch / sh)
+        rw = sw * scale
+        rh = sh * scale
+        ox = (cw - rw) / 2
+        oy = (ch - rh) / 2
+      } else {
+        // object-cover: fill the screen, crop the overflow.
+        scale = Math.max(cw / sw, ch / sh)
+        rw = sw * scale
+        rh = sh * scale
+        ox = (cw - rw) / 2
+        oy = (ch - rh) / 2
+      }
     }
 
     const px = (lm: Landmark) => (mirror ? (1 - lm.x) * rw + ox : lm.x * rw + ox)
@@ -133,7 +146,7 @@ export function PoseCanvas({
       ctx.lineWidth = 2.5
       ctx.stroke()
     })
-  }, [landmarks, video, mirror, highlightJoints])
+  }, [landmarks, video, mirror, highlightJoints, fit])
 
   return (
     <canvas

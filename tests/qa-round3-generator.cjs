@@ -246,19 +246,19 @@ async function main() {
     )
   }
 
-  // Jumping jacks: arms down (~175deg) -> fully up (~15deg) -> down.
-  for (const [downDirection, upDirection] of [[82, -72], [96, -58], [70, -78]]) {
+  // Jumping jacks: measured angle 15deg (arms down) -> 175deg (arms up) -> down.
+  for (const armLength of [0.20, 0.25, 0.30]) {
     const config = exercises.jumpingjacks
     const counter = createRepCounter(config)
     const { states } = cycle(counter, config, [
-      jumpingJackPose(174, downDirection, 0.25),
-      jumpingJackPose(16, upDirection, 0.25),
-      jumpingJackPose(174, downDirection, 0.25),
+      jumpingJackPose(15, armLength),
+      jumpingJackPose(175, armLength),
+      jumpingJackPose(15, armLength),
     ])
     check(
-      `jumping jacks count 1 cycle (arms ${downDirection}/${upDirection}deg)`,
-      states[0].phase === "up" &&
-        states[1].phase === "down" &&
+      `jumping jacks count 1 cycle (arm length ${armLength})`,
+      states[0].phase === "down" &&
+        states[1].phase === "up" &&
         states[2].reps === 1,
       `phases=${states.map((s) => s.phase).join("/")} reps=${states.at(-1).reps}`
     )

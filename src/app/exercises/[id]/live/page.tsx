@@ -92,15 +92,36 @@ export default function LiveWorkoutPage() {
           setCameraState("unavailable")
           return
         }
-        const s = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode,
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            frameRate: { ideal: 30 },
-          },
-          audio: false,
-        })
+        // Ask for a stream whose aspect ratio matches the screen. Forcing a
+        // fixed 1280x720 on a portrait phone returns a LANDSCAPE stream which
+        // then gets cropped so hard that the user falls out of frame.
+        const screenAspect =
+          typeof window !== "undefined" && window.innerHeight > 0
+            ? Math.min(2, Math.max(0.4, window.innerWidth / window.innerHeight))
+            : 0.5625
+
+        let s: MediaStream
+        try {
+          s = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode,
+              aspectRatio: { ideal: screenAspect },
+              frameRate: { ideal: 30 },
+            },
+            audio: false,
+          })
+        } catch (err: any) {
+          // Some devices reject the aspect-ratio hint - retry with the bare
+          // minimum so the camera still comes up.
+          if (err?.name === "OverconstrainedError" || err?.name === "NotFoundError") {
+            s = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode },
+              audio: false,
+            })
+          } else {
+            throw err
+          }
+        }
         if (cancelled) {
           s.getTracks().forEach((t) => t.stop())
           return
@@ -342,6 +363,7 @@ export default function LiveWorkoutPage() {
         stream={stream}
         videoRef={videoRef}
         mirror={facingMode === "user"}
+        fit="contain"
       />
 
       {/* Skeleton overlay - always mounted so the layer never pops in/out */}
@@ -350,6 +372,7 @@ export default function LiveWorkoutPage() {
         video={videoRef.current}
         mirror={facingMode === "user"}
         highlightJoints={config.trackedLandmarks}
+        fit="contain"
       />
 
       {/* ---- Overlays ---- */}

@@ -10,6 +10,13 @@ interface CameraViewProps {
   width?: number
   height?: number
   mirror?: boolean
+  /**
+   * How the video is fitted into the screen.
+   *  - "cover": fills the screen, crops the overflow.
+   *  - "contain": shows the whole frame (letterboxed). Used on phones so a
+   *    landscape camera stream never crops the user out of view.
+   */
+  fit?: "cover" | "contain"
   onLoadedMetadata?: () => void
   onError?: (err: Error) => void
 }
@@ -20,6 +27,7 @@ export function CameraView({
   width = 1280,
   height = 720,
   mirror = false,
+  fit = "cover",
   onLoadedMetadata,
   onError,
 }: CameraViewProps) {
@@ -52,7 +60,9 @@ export function CameraView({
         playsInline
         disablePictureInPicture
         onLoadedMetadata={onLoadedMetadata}
-        className={`h-full w-full object-cover ${mirror ? "mirror" : ""}`}
+        className={`h-full w-full ${fit === "contain" ? "object-contain" : "object-cover"} ${
+          mirror ? "mirror" : ""
+        }`}
         style={{ transform: mirror ? "scaleX(-1)" : undefined }}
       />
     </div>
