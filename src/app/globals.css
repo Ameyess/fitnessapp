@@ -22,6 +22,10 @@
   --c-primary-dark: #4aa802;
   --c-primary-soft: #d7ffb8;
   --c-primary-text: #3f8a02;
+  /* Text on --c-primary-soft. #2f6b00 on #d7ffb8 = 5.86:1 (WCAG AA).
+     --c-primary-text (#3f8a02) is only 3.90:1 there, so status labels use
+     this darker variant instead. */
+  --c-status-text: #2f6b00;
 
   --c-flame: #ff9600;
   --c-flame-dark: #e08600;
@@ -52,6 +56,7 @@
   --c-primary-dark: #46a302;
   --c-primary-soft: #16351a;
   --c-primary-text: #8ee85c;
+  --c-status-text: #b6f08a;
 
   --c-flame: #ff9600;
   --c-flame-dark: #d97e00;
@@ -125,7 +130,7 @@
 @layer components {
   /* ---- Surfaces ---- */
   .card {
-    @apply rounded-2xl border p-4;
+    @apply rounded-2xl border-2 p-4;
     background-color: var(--c-surface);
     border-color: var(--c-border);
   }
@@ -133,7 +138,7 @@
     @apply card p-5;
   }
   .card-raised {
-    @apply rounded-2xl border p-4;
+    @apply rounded-2xl border-2 p-4;
     background-color: var(--c-raised);
     border-color: var(--c-border);
   }

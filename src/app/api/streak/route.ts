@@ -43,7 +43,12 @@ export async function POST(req: NextRequest) {
   const exGoals: Record<string, any> = {}
   Object.keys(goals).forEach((k) => { if (goals[k].enabled) exGoals[k] = goals[k] })
 
-  let allCompleted = true
+  const customPlan = Array.isArray(profile.customPlan) ? profile.customPlan : []
+  customPlan.forEach((entry: any) => {
+    if (entry?.enabled && entry.id) exGoals[entry.id] = entry
+  })
+
+  let allCompleted = Object.keys(exGoals).length > 0
   let anyDone = false
   for (const [ex, g] of Object.entries(exGoals)) {
     const w = workouts.find((x) => x.exerciseId === ex)

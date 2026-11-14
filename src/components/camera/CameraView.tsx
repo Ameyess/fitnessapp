@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { type Rotation } from "@/lib/camera/rotation"
 
 interface CameraViewProps {
   stream: MediaStream | null
@@ -10,11 +11,13 @@ interface CameraViewProps {
   width?: number
   height?: number
   mirror?: boolean
+  /** Clockwise rotation applied to the camera content. */
+  rotation?: Rotation
   /**
    * How the video is fitted into the screen.
    *  - "cover": fills the screen, crops the overflow.
-   *  - "contain": shows the whole frame (letterboxed). Used on phones so a
-   *    landscape camera stream never crops the user out of view.
+   *  - "contain": shows the whole frame (letterboxed). Used when the source
+   *    and viewport aspect ratios differ enough to crop the user out.
    */
   fit?: "cover" | "contain"
   onLoadedMetadata?: () => void
@@ -24,14 +27,19 @@ interface CameraViewProps {
 export function CameraView({
   stream,
   videoRef,
-  width = 1280,
-  height = 720,
   mirror = false,
+  rotation = 0,
   fit = "cover",
   onLoadedMetadata,
   onError,
 }: CameraViewProps) {
   const localRef = React.useRef<HTMLVideoElement | null>(null)
+  const containerRef = React.useRef<HTMLDivElement | null>(null)
+  const [containerSize, setContainerSize] = React.useState<{
+    width: number
+    height: number
+  } | null>(null)
+
   const setRef = React.useCallback(
     (node: HTMLVideoElement | null) => {
       localRef.current = node
@@ -51,20 +59,93 @@ export function CameraView({
     }
   }, [stream])
 
+  React.useEffect(() => {
+    const container = containerRef.current
+    if (!container || typeof ResizeObserver === "undefined") return
+
+    const updateSize = () => {
+      const nextWidth = container.clientWidth
+      const nextHeight = container.clientHeight
+      if (nextWidth <= 0 || nextHeight <= 0) return
+
+      setContainerSize((current) => {
+        if (current?.width === nextWidth && current.height === nextHeight) {
+          return current
+        }
+        return { width: nextWidth, height: nextHeight }
+      })
+    }
+
+    updateSize()
+    const observer = new ResizeObserver(updateSize)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
+
+  const swapsAxes = rotation === 90 || rotation === 270
+  const frameWidth = containerSize
+    ? swapsAxes
+      ? containerSize.height
+      : containerSize.width
+    : null
+  const frameHeight = containerSize
+    ? swapsAxes
+      ? containerSize.width
+      : containerSize.height
+    : null
+
+  const wrapperStyle = {
+    "--camera-frame-width": frameWidth ? `${frameWidth}px` : "100%",
+    "--camera-frame-height": frameHeight ? `${frameHeight}px` : "100%",
+  } as React.CSSProperties
+
+  const videoTransform = [
+    rotation ? `rotate(${rotation}deg)` : "",
+    mirror ? "scaleX(-1)" : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+
   return (
-    <div className="absolute inset-0 overflow-hidden bg-black">
-      <video
-        ref={setRef}
-        autoPlay
-        muted
-        playsInline
-        disablePictureInPicture
-        onLoadedMetadata={onLoadedMetadata}
-        className={`h-full w-full ${fit === "contain" ? "object-contain" : "object-cover"} ${
-          mirror ? "mirror" : ""
-        }`}
-        style={{ transform: mirror ? "scaleX(-1)" : undefined }}
-      />
+    <div
+      ref={containerRef}
+      className="absolute inset-0 overflow-hidden bg-black"
+      style={wrapperStyle}
+    >
+      <div
+        className="absolute"
+        style={{
+          left: "50%",
+          top: "50%",
+          width: "var(--camera-frame-width)",
+          height: "var(--camera-frame-height)",
+          transform: "translate(-50%, -50%)",
+        }}
+      >
+        <video
+          ref={setRef}
+          autoPlay
+          muted
+          playsInline
+          disablePictureInPicture
+          onLoadedMetadata={onLoadedMetadata}
+          onError={
+            onError
+              ? () => onError(new Error("Camera video failed to load"))
+              : undefined
+          }
+          data-testid="camera-video"
+          data-rotation={rotation}
+          className="block"
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: fit,
+            transform: videoTransform || "none",
+            transformOrigin: "center",
+          }}
+        />
+      </div>
     </div>
   )
 }

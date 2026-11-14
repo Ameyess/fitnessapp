@@ -8,10 +8,12 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:unit && npm run test:e2e && npm run test:pages",
+    "test": "npm run test:unit && npm run test:rotation && npm run test:e2e && npm run test:pages && npm run test:features",
     "test:unit": "node tests/repcounter.test.cjs",
+    "test:rotation": "node tests/rotation.test.cjs",
     "test:e2e": "node tests/e2e.cjs http://localhost:3000",
-    "test:pages": "node tests/pages.cjs http://localhost:3000"
+    "test:pages": "node tests/pages.cjs http://localhost:3000",
+    "test:features": "node tests/features.cjs http://localhost:3000"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "latest",

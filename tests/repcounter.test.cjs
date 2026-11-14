@@ -149,6 +149,47 @@ function torsoLandmarks(elev, kneeX = 0.78) {
   return lm
 }
 
+/**
+ * Jumping-jack geometry.
+ *
+ * The counter measures the shoulder -> wrist angle against the vertical:
+ * 0deg = arms straight down at the sides, 180deg = arms straight overhead.
+ * `deg` is that measured angle.
+ */
+function jumpingJackLandmarks(deg) {
+  const rad = (deg * Math.PI) / 180
+  const lm = new Array(33).fill(null).map(() => ({
+    x: 0.5,
+    y: 0.5,
+    z: 0,
+    visibility: 1,
+  }))
+  const set = (i, p) => {
+    lm[i] = { x: p.x, y: p.y, z: 0, visibility: 1 }
+  }
+  const len = 0.4
+  for (const [shoulderIdx, wristIdx, sx] of [
+    [11, 15, 0.45],
+    [12, 16, 0.55],
+  ]) {
+    const sy = 0.3
+    // The reference point the counter uses sits 0.1 above the shoulder.
+    const ref = { x: sx, y: sy - 0.1 }
+    // Rotate the downward reference vector by `deg` to get the wrist.
+    const dx = -Math.sin(rad)
+    const dy = Math.cos(rad)
+    set(shoulderIdx, { x: sx, y: sy })
+    set(wristIdx, { x: ref.x + len * dx, y: ref.y + len * dy })
+  }
+  set(23, { x: 0.45, y: 0.65 })
+  set(24, { x: 0.55, y: 0.65 })
+  set(25, { x: 0.44, y: 0.85 })
+  set(26, { x: 0.56, y: 0.85 })
+  set(27, { x: 0.43, y: 0.98 })
+  set(28, { x: 0.57, y: 0.98 })
+  return lm
+}
+
 /* ---------------- test runner ---------------- */
 async function load() {
   await esbuild.build({
@@ -326,6 +367,64 @@ async function main() {
         `phases=${downPhase}/${upPhase} reps=${c.getState().reps}`
       )
     }
+  }
+
+  /* ---- 4e. jumping jacks: a PARTIAL raise must not re-arm the counter ----
+         The old thresholds (down 150 / up 60) had no hysteresis band, so a
+         raise to 140deg re-armed the machine and the next full raise was
+         counted as a second rep. ---- */
+  {
+    const cfg = exerciseRegistry.jumpingjacks
+    const c = createRepCounter(cfg)
+    let t = 1000
+    c.update({ config: cfg, landmarks: jumpingJackLandmarks(12), now: t })
+    check(
+      "jumping jacks: arms down is the start phase",
+      c.getState().phase === "down",
+      c.getState().phase
+    )
+    t += 500
+    c.update({ config: cfg, landmarks: jumpingJackLandmarks(172), now: t })
+    check(
+      "jumping jacks: arms overhead registers as 'up'",
+      c.getState().phase === "up",
+      c.getState().phase
+    )
+    check(
+      "jumping jacks: raising the arms counts 1 rep",
+      c.getState().reps === 1,
+      `reps=${c.getState().reps}`
+    )
+    t += 500
+    c.update({ config: cfg, landmarks: jumpingJackLandmarks(140), now: t })
+    t += 500
+    c.update({ config: cfg, landmarks: jumpingJackLandmarks(172), now: t })
+    check(
+      "jumping jacks: a partial raise does not count a second rep",
+      c.getState().reps === 1,
+      `reps=${c.getState().reps}`
+    )
+  }
+
+  /* ---- 4f. jumping jacks: a full cycle still counts every rep ----
+         The counter needs a complete arms-down -> arms-up cycle, so the
+         sequence starts from the arms-down position. ---- */
+  {
+    const cfg = exerciseRegistry.jumpingjacks
+    const c = createRepCounter(cfg)
+    let t = 1000
+    c.update({ config: cfg, landmarks: jumpingJackLandmarks(12), now: t })
+    for (let cycle = 0; cycle < 3; cycle++) {
+      t += 500
+      c.update({ config: cfg, landmarks: jumpingJackLandmarks(172), now: t })
+      t += 500
+      c.update({ config: cfg, landmarks: jumpingJackLandmarks(12), now: t })
+    }
+    check(
+      "jumping jacks: three full cycles count 3 reps",
+      c.getState().reps === 3,
+      `reps=${c.getState().reps}`
+    )
   }
 
   /* ---- 4d. leg position must not change the measurement ---- */

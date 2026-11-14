@@ -12,7 +12,7 @@ import {
   writeBatch,
 } from "firebase/firestore"
 import { getFirebase } from "@/lib/firebase"
-import type { UserProfile, WorkoutLog, Friend, ExerciseId } from "@/types"
+import type { UserProfile, WorkoutLog, Friend, ExerciseId, CustomExercise } from "@/types"
 
 const { db } = getFirebase()
 
@@ -35,6 +35,11 @@ export async function setUserProfile(uid: string, data: Partial<UserProfile>) {
   await setDoc(doc(db, USERS, uid), { ...data, updatedAt: Date.now() }, { merge: true })
 }
 
+/** Replaces the user's custom plan while leaving the rest of their profile intact. */
+export async function saveCustomPlan(uid: string, customPlan: CustomExercise[]) {
+  await setUserProfile(uid, { customPlan })
+}
+
 export async function createUserProfile(uid: string, email?: string | null, displayName?: string | null) {
   const ref = doc(db, USERS, uid)
   const snap = await getDoc(ref)
@@ -53,6 +58,7 @@ export async function createUserProfile(uid: string, email?: string | null, disp
       jumpingjacks: { reps: 20, enabled: true },
       planks: { seconds: 30, enabled: true },
     },
+    customPlan: [],
     rampEnabled: true,
     restDays: [],
     streak: 0,

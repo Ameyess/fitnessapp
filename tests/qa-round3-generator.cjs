@@ -1,312 +1,260 @@
 /* eslint-disable no-console */
 /**
- * Independent Round 3 QA generator.
+ * Independent Round 3 QA for the shipped repetition counter.
  *
- * This deliberately does NOT reuse tests/repcounter.test.cjs helpers.  It
- * generates MediaPipe-shaped landmarks with forward segment kinematics,
- * then drives the shipped src/lib/exercises/repCounter.ts bundle.
+ * This generator deliberately does not import or copy helpers from the
+ * repository's unit test. It builds MediaPipe-shaped landmark arrays with
+ * forward kinematics, bundles the real TypeScript implementation with
+ * esbuild, and drives that bundle.
  *
  * Run: node tests/qa-round3-generator.cjs
  */
-const path = require("path")
 const fs = require("fs")
-const os = require("os")
+const path = require("path")
 const esbuild = require("esbuild")
 
 const ROOT = path.join(__dirname, "..")
-const OUT = path.join(
-  "C:\\Users\\Amayas\\AppData\\Local\\Temp\\opencode",
-  "fitstreak-round3-repcounter.cjs"
-)
-const EX_OUT = path.join(
-  "C:\\Users\\Amayas\\AppData\\Local\\Temp\\opencode",
-  "fitstreak-round3-exercises.cjs"
-)
+const TMP = "C:\\Users\\Amayas\\AppData\\Local\\Temp\\opencode"
+const COUNTER_OUT = path.join(TMP, "fitstreak-r3-independent-repcounter.cjs")
+const EXERCISES_OUT = path.join(TMP, "fitstreak-r3-independent-exercises.cjs")
+const DEG = Math.PI / 180
 
-const checks = []
-function check(name, pass, detail = "") {
-  checks.push({ name, pass, detail })
-  console.log(`${pass ? "PASS" : "FAIL"}  ${name}${detail ? " :: " + detail : ""}`)
+const results = []
+function expect(label, actual, wanted) {
+  const pass = JSON.stringify(actual) === JSON.stringify(wanted)
+  results.push({ label, pass, actual, wanted })
+  console.log(`${pass ? "PASS" : "FAIL"}  ${label} :: actual=${JSON.stringify(actual)} expected=${JSON.stringify(wanted)}`)
 }
 
-const RAD = Math.PI / 180
-const add = (p, angle, length) => ({
-  x: p.x + Math.cos(angle * RAD) * length,
-  y: p.y + Math.sin(angle * RAD) * length,
-})
-const mirrorX = (p) => ({ x: 1 - p.x, y: p.y })
-const basePose = () =>
-  Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, z: 0, visibility: 1 }))
-
-/**
- * Put C after A--B so the interior angle A-B-C is exactly `jointAngle`.
- * `aToB` and `bToC` are independent segment directions.
- */
-function chain(A, B, jointAngle, bToC, lengthBC) {
-  const aToB = Math.atan2(B.y - A.y, B.x - A.x) / RAD
-  const bToA = aToB + 180
-  const direction = bToA + jointAngle
-  return add(B, direction, lengthBC)
+function add(origin, directionDeg, length) {
+  const a = directionDeg * DEG
+  return { x: origin.x + Math.cos(a) * length, y: origin.y + Math.sin(a) * length }
 }
 
-function bilateralPose(left, mapping) {
-  const lm = basePose()
-  for (const [leftIndex, rightIndex, point] of mapping) {
-    lm[leftIndex] = { ...point, z: 0, visibility: 1 }
-    lm[rightIndex] = { ...mirrorX(point), z: 0, visibility: 1 }
+/** Place C so angle(A-B-C) is exactly wantedDegrees. */
+function exactJoint(A, B, wantedDegrees, lengthBC, turn = 1) {
+  const towardA = Math.atan2(A.y - B.y, A.x - B.x) / DEG
+  return add(B, towardA + turn * wantedDegrees, lengthBC)
+}
+
+function point(x, y) {
+  return { x, y, z: 0, visibility: 1 }
+}
+
+/** A 33-point pose; unassigned points remain valid but outside the body. */
+function pose(pairs) {
+  const out = Array.from({ length: 33 }, () => point(0.5, 0.5))
+  for (const [leftIndex, rightIndex, leftPoint] of pairs) {
+    out[leftIndex] = { ...leftPoint, z: 0, visibility: 1 }
+    out[rightIndex] = { ...point(1 - leftPoint.x, leftPoint.y), z: 0, visibility: 1 }
   }
-  return lm
+  return out
 }
 
-/** Push-up: torso plus an arm whose shoulder-elbow-wrist angle is exact. */
-function pushupPose(elbowAngle, armDirection, armLength) {
-  const shoulder = { x: 0.42, y: 0.28 }
+function pushup(elbowDegrees, armDirection, armLength) {
+  const shoulder = point(0.42, 0.28)
   const elbow = add(shoulder, armDirection, armLength)
-  const wrist = chain(shoulder, elbow, elbowAngle, 0, armLength)
-  return bilateralPose(shoulder, [
-    [11, 12, shoulder],
-    [13, 14, elbow],
-    [15, 16, wrist],
-    [23, 24, { x: 0.42, y: 0.62 }],
-    [25, 26, { x: 0.44, y: 0.80 }],
-    [27, 28, { x: 0.46, y: 0.96 }],
+  const wrist = exactJoint(shoulder, elbow, elbowDegrees, armLength)
+  return pose([
+    [11, 12, shoulder], [13, 14, elbow], [15, 16, wrist],
+    [23, 24, point(0.42, 0.62)], [25, 26, point(0.44, 0.80)],
+    [27, 28, point(0.46, 0.96)],
   ])
 }
 
-/** Sit-up/crunch: torso segment elevation from horizontal, knee-independent. */
-function torsoPose(elevation, torsoDirection, kneeX, kneeY) {
-  const hip = { x: 0.58, y: 0.66 }
-  const shoulder = add(hip, torsoDirection, 0.31)
-  const knee = { x: kneeX, y: kneeY }
-  return bilateralPose(shoulder, [
-    [11, 12, shoulder],
-    [23, 24, hip],
-    [25, 26, knee],
+function floorTorso(elevationDegrees, kneeX, kneeY) {
+  const hip = point(0.58, 0.66)
+  const shoulder = add(hip, 180 + elevationDegrees, 0.31)
+  return pose([
+    [11, 12, shoulder], [23, 24, hip], [25, 26, point(kneeX, kneeY)],
   ])
 }
 
-/** Squat: exact hip-knee-ankle interior angle. */
-function squatPose(kneeAngle, thighDirection, kneeLength) {
-  const hip = { x: 0.44, y: 0.35 }
-  const knee = add(hip, thighDirection, kneeLength)
-  const ankle = chain(hip, knee, kneeAngle, 0, kneeLength)
-  return bilateralPose(hip, [
-    [11, 12, { x: 0.44, y: 0.18 }],
-    [23, 24, hip],
-    [25, 26, knee],
-    [27, 28, ankle],
+function squat(kneeDegrees, thighDirection, legLength) {
+  const hip = point(0.44, 0.35)
+  const knee = add(hip, thighDirection, legLength)
+  const ankle = exactJoint(hip, knee, kneeDegrees, legLength)
+  return pose([
+    [11, 12, point(0.44, 0.18)], [23, 24, hip],
+    [25, 26, knee], [27, 28, ankle],
   ])
 }
 
-/** Jumping jack: target the angle measured at the virtual point above shoulder. */
-function jumpingJackPose(measuredAngle, armLength) {
-  const shoulder = { x: 0.43, y: 0.42 }
-  const virtualAboveShoulder = { x: shoulder.x, y: shoulder.y - 0.1 }
-  // The measured ray starts at the virtual point, not at the shoulder.
-  const wrist = add(virtualAboveShoulder, 90 - measuredAngle, armLength)
-  return bilateralPose(shoulder, [
-    [11, 12, shoulder],
-    [15, 16, wrist],
-    [23, 24, { x: 0.48, y: 0.65 }],
-    [25, 26, { x: 0.48, y: 0.82 }],
-    [27, 28, { x: 0.48, y: 0.97 }],
+/** Construct the wrist so the counter's virtual vertical angle is exact. */
+function jumpingJack(measuredDegrees, armLength) {
+  const shoulder = point(0.43, 0.42)
+  const virtual = point(shoulder.x, shoulder.y - 0.1)
+  const a = measuredDegrees * DEG
+  const wrist = point(virtual.x + Math.sin(a) * armLength, virtual.y + Math.cos(a) * armLength)
+  return pose([
+    [11, 12, shoulder], [15, 16, wrist],
+    [23, 24, point(0.48, 0.65)], [25, 26, point(0.48, 0.82)],
+    [27, 28, point(0.48, 0.97)],
   ])
 }
 
-/** Plank: exact shoulder-hip-ankle interior angle, independently per side. */
-function plankPose(hipAngle, shoulderDirection) {
-  const shoulder = { x: 0.20, y: 0.50 }
-  const hip = { x: 0.50, y: 0.52 }
-  const ankle = chain(shoulder, hip, hipAngle, 0, 0.31)
-  return bilateralPose(shoulder, [
-    [11, 12, shoulder],
-    [23, 24, hip],
-    [27, 28, ankle],
-  ])
+function plank(hipDegrees, turn = -1) {
+  const shoulder = point(0.20, 0.50)
+  const hip = point(0.50, 0.52)
+  const ankle = exactJoint(shoulder, hip, hipDegrees, 0.31, turn)
+  return pose([[11, 12, shoulder], [23, 24, hip], [27, 28, ankle]])
 }
 
-async function loadShippedCode() {
-  fs.mkdirSync(path.dirname(OUT), { recursive: true })
-  await esbuild.build({
-    entryPoints: [path.join(ROOT, "src/lib/exercises/repCounter.ts")],
+async function loadShippedImplementation() {
+  fs.mkdirSync(TMP, { recursive: true })
+  const common = {
     bundle: true,
     format: "cjs",
     platform: "node",
-    outfile: OUT,
     alias: { "@": path.join(ROOT, "src") },
     logLevel: "silent",
+  }
+  await esbuild.build({
+    ...common,
+    entryPoints: [path.join(ROOT, "src/lib/exercises/repCounter.ts")],
+    outfile: COUNTER_OUT,
   })
   await esbuild.build({
+    ...common,
     entryPoints: [path.join(ROOT, "src/lib/exercises/index.ts")],
-    bundle: true,
-    format: "cjs",
-    platform: "node",
-    outfile: EX_OUT,
-    alias: { "@": path.join(ROOT, "src") },
-    logLevel: "silent",
+    outfile: EXERCISES_OUT,
   })
   return {
-    createRepCounter: require(OUT).createRepCounter,
-    exercises: require(EX_OUT).exerciseRegistry,
+    createRepCounter: require(COUNTER_OUT).createRepCounter,
+    exercises: require(EXERCISES_OUT).exerciseRegistry,
   }
 }
 
-function cycle(counter, config, poses, start = 10_000) {
+function drive(createRepCounter, config, frames, start = 10_000) {
+  const counter = createRepCounter(config)
   let now = start
-  const states = []
-  for (const pose of poses) {
+  const states = frames.map((landmarks) => {
     now += 500
-    states.push(counter.update({ config, landmarks: pose, now }))
-  }
-  return { states, now }
+    return counter.update({ config, landmarks, now })
+  })
+  return states
 }
 
 async function main() {
-  const { createRepCounter, exercises } = await loadShippedCode()
+  const { createRepCounter, exercises } = await loadShippedImplementation()
 
-  // Push-ups: several arm directions and segment lengths.
-  for (const [armDirection, armLength] of [[55, 0.15], [80, 0.17], [110, 0.13]]) {
+  // Push-ups: elbow angle, upper-arm direction and limb length all vary.
+  for (const [armDirection, armLength] of [[50, 0.14], [72, 0.16], [95, 0.18], [118, 0.13]]) {
     const config = exercises.pushups
-    const counter = createRepCounter(config)
-    const { states } = cycle(counter, config, [
-      pushupPose(174, armDirection, armLength),
-      pushupPose(88, armDirection, armLength),
-      pushupPose(174, armDirection, armLength),
-      pushupPose(88, armDirection, armLength),
-      pushupPose(174, armDirection, armLength),
+    const states = drive(createRepCounter, config, [
+      pushup(172, armDirection, armLength),
+      pushup(88, armDirection, armLength),
+      pushup(172, armDirection, armLength),
+      pushup(88, armDirection, armLength),
+      pushup(172, armDirection, armLength),
     ])
-    check(
-      `pushups count 2 cycles (arm ${armDirection}deg)`,
-      states[0].phase === "up" &&
-        states[1].phase === "down" &&
-        states[2].reps === 1 &&
-        states[4].reps === 2,
-      `phases=${states.map((s) => s.phase).join("/")} reps=${states.at(-1).reps}`
-    )
+    expect(`pushups count two cycles (arm=${armDirection},len=${armLength})`, states.at(-1).reps, 2)
+    expect(`pushups phases (arm=${armDirection},len=${armLength})`, states.map((s) => s.phase), ["up", "down", "up", "down", "up"])
   }
 
   // Sit-ups: raised torso plus deliberately different knee placements.
-  for (const [upElevation, kneeX] of [
-    [68, 0.80],
-    [76, 0.62],
-    [82, 0.90],
-  ]) {
+  for (const [elevation, kneeX, kneeY] of [[64, 0.78, 0.72], [72, 0.62, 0.74], [80, 0.91, 0.70], [68, 0.84, 0.80]]) {
     const config = exercises.situps
-    const counter = createRepCounter(config)
-    const { states } = cycle(counter, config, [
-      torsoPose(6, 186, kneeX, 0.72),
-      torsoPose(upElevation, 180 + upElevation, kneeX, 0.72),
-      torsoPose(6, 186, kneeX, 0.72),
+    const states = drive(createRepCounter, config, [
+      floorTorso(5, kneeX, kneeY),
+      floorTorso(elevation, kneeX, kneeY),
+      floorTorso(5, kneeX, kneeY),
     ])
-    check(
-      `situps count 1 cycle (up ${upElevation}deg, knee x=${kneeX})`,
-      states[0].phase === "down" &&
-        states[1].phase === "up" &&
-        states[2].reps === 1,
-      `phases=${states.map((s) => s.phase).join("/")} reps=${states.at(-1).reps}`
-    )
+    expect(`situps count one cycle (elevation=${elevation},kneeX=${kneeX})`, states.at(-1).reps, 1)
+    expect(`situps phases (elevation=${elevation},kneeX=${kneeX})`, states.map((s) => s.phase), ["down", "up", "down"])
   }
 
-  // Crunches: same invariant over a smaller torso elevation.
-  for (const [upElevation, kneeX] of [[35, 0.78], [41, 0.60], [46, 0.91]]) {
+  // Crunches: the smaller torso movement, again independent of knees.
+  for (const [elevation, kneeX] of [[34, 0.80], [39, 0.63], [45, 0.90]]) {
     const config = exercises.crunches
-    const counter = createRepCounter(config)
-    const { states } = cycle(counter, config, [
-      torsoPose(5, 186, kneeX, 0.73),
-      torsoPose(upElevation, 180 + upElevation, kneeX, 0.73),
-      torsoPose(5, 186, kneeX, 0.73),
+    const states = drive(createRepCounter, config, [
+      floorTorso(4, kneeX, 0.73),
+      floorTorso(elevation, kneeX, 0.73),
+      floorTorso(4, kneeX, 0.73),
     ])
-    check(
-      `crunches count 1 cycle (up ${upElevation}deg, knee x=${kneeX})`,
-      states[0].phase === "down" &&
-        states[1].phase === "up" &&
-        states[2].reps === 1,
-      `phases=${states.map((s) => s.phase).join("/")} reps=${states.at(-1).reps}`
-    )
+    expect(`crunches count one cycle (elevation=${elevation},kneeX=${kneeX})`, states.at(-1).reps, 1)
+    expect(`crunches phases (elevation=${elevation},kneeX=${kneeX})`, states.map((s) => s.phase), ["down", "up", "down"])
   }
 
-  // Squats: several thigh directions.
-  for (const [thighDirection, kneeLength] of [[82, 0.20], [100, 0.23], [125, 0.18]]) {
+  // Squats: exact knee angles with varied thigh direction and leg length.
+  for (const [thighDirection, legLength] of [[78, 0.19], [96, 0.22], [112, 0.17], [126, 0.24]]) {
     const config = exercises.squats
-    const counter = createRepCounter(config)
-    const { states } = cycle(counter, config, [
-      squatPose(172, thighDirection, kneeLength),
-      squatPose(92, thighDirection, kneeLength),
-      squatPose(172, thighDirection, kneeLength),
-      squatPose(92, thighDirection, kneeLength),
-      squatPose(172, thighDirection, kneeLength),
+    const states = drive(createRepCounter, config, [
+      squat(172, thighDirection, legLength),
+      squat(94, thighDirection, legLength),
+      squat(172, thighDirection, legLength),
+      squat(94, thighDirection, legLength),
+      squat(172, thighDirection, legLength),
     ])
-    check(
-      `squats count 2 cycles (thigh ${thighDirection}deg)`,
-      states[0].phase === "up" &&
-        states[1].phase === "down" &&
-        states[2].reps === 1 &&
-        states[4].reps === 2,
-      `phases=${states.map((s) => s.phase).join("/")} reps=${states.at(-1).reps}`
-    )
+    expect(`squats count two cycles (thigh=${thighDirection},len=${legLength})`, states.at(-1).reps, 2)
+    expect(`squats phases (thigh=${thighDirection},len=${legLength})`, states.map((s) => s.phase), ["up", "down", "up", "down", "up"])
   }
 
-  // Jumping jacks: measured angle 15deg (arms down) -> 175deg (arms up) -> down.
-  for (const armLength of [0.20, 0.25, 0.30]) {
+  // Jumping jacks: exact arm angle relative to the counter's vertical ray.
+  for (const armLength of [0.18, 0.23, 0.28]) {
     const config = exercises.jumpingjacks
-    const counter = createRepCounter(config)
-    const { states } = cycle(counter, config, [
-      jumpingJackPose(15, armLength),
-      jumpingJackPose(175, armLength),
-      jumpingJackPose(15, armLength),
+    const states = drive(createRepCounter, config, [
+      jumpingJack(12, armLength),
+      jumpingJack(172, armLength),
+      jumpingJack(12, armLength),
     ])
-    check(
-      `jumping jacks count 1 cycle (arm length ${armLength})`,
-      states[0].phase === "down" &&
-        states[1].phase === "up" &&
-        states[2].reps === 1,
-      `phases=${states.map((s) => s.phase).join("/")} reps=${states.at(-1).reps}`
+    expect(`jumping jacks count one cycle (arm=${armLength})`, states.at(-1).reps, 1)
+    expect(`jumping jacks phases (arm=${armLength})`, states.map((s) => s.phase), ["down", "up", "down"])
+  }
+
+  // A partial arm raise that never reaches the overhead endpoint must not
+  // count as a complete jumping jack.
+  {
+    const config = exercises.jumpingjacks
+    const states = drive(createRepCounter, config, [
+      jumpingJack(12, 0.23),
+      jumpingJack(90, 0.23),
+      jumpingJack(12, 0.23),
+    ])
+    expect("partial jumping jack does not count a rep", states.at(-1).reps, 0)
+  }
+
+  // Returning only partway toward the down endpoint must not complete a rep.
+  {
+    const config = exercises.jumpingjacks
+    const states = drive(createRepCounter, config, [
+      jumpingJack(12, 0.23),
+      jumpingJack(172, 0.23),
+      jumpingJack(140, 0.23),
+      jumpingJack(172, 0.23),
+    ])
+    expect(
+      "partial return does not count another jumping jack",
+      {
+        reps: states.at(-1).reps,
+        phases: states.map((s) => s.phase),
+        angles: states.map((s) => Math.round(s.angle ?? -1)),
+      },
+      { reps: 1, phases: ["down", "up", "up", "up"], angles: [12, 172, 140, 172] },
     )
   }
 
-  // Timed exercise: preserve the start of an unbroken hold and reset it.
+  // Timed exercise: elapsed time is the uninterrupted hold, not wall time.
   {
     const config = exercises.planks
     const counter = createRepCounter(config)
-    let now = 20_000
-    const first = counter.update({
-      config,
-      landmarks: plankPose(178, 180),
-      now,
-    })
-    now += 4_250
-    const held = counter.update({
-      config,
-      landmarks: plankPose(176, 180),
-      now,
-    })
-    now += 500
-    const broken = counter.update({
-      config,
-      landmarks: plankPose(142, 180),
-      now,
-    })
-    now += 700
-    const resumed = counter.update({
-      config,
-      landmarks: plankPose(179, 180),
-      now,
-    })
-    check(
-      "plank holdStart survives 4.25s aligned hold",
-      first.holdStart === 20_000 && held.holdStart === 20_000 && held.phase === "holding",
-      `first=${first.holdStart} held=${held.holdStart}`
-    )
-    check(
-      "plank holdStart resets on broken position and restarts",
-      broken.holdStart === null && resumed.holdStart === now,
-      `broken=${broken.holdStart} resumed=${resumed.holdStart} expected=${now}`
-    )
+    const t0 = 20_000
+    const first = counter.update({ config, landmarks: plank(178), now: t0 })
+    const heldAt = t0 + 4_250
+    const held = counter.update({ config, landmarks: plank(176), now: heldAt })
+    const brokenAt = heldAt + 500
+    const broken = counter.update({ config, landmarks: plank(138), now: brokenAt })
+    const resumedAt = brokenAt + 700
+    const resumed = counter.update({ config, landmarks: plank(179), now: resumedAt })
+    expect("plank starts and preserves an aligned hold", [first.holdStart, held.holdStart, held.phase], [t0, t0, "holding"])
+    expect("plank reports 4.25 seconds of held time", heldAt - held.holdStart, 4_250)
+    expect("plank resets held time when alignment breaks", [broken.holdStart, broken.phase], [null, "resting"])
+    expect("plank starts a fresh hold after the break", resumed.holdStart, resumedAt)
   }
 
-  const passed = checks.filter((c) => c.pass).length
-  console.log(`\n=== ${passed}/${checks.length} independent generator checks passed ===`)
-  if (passed !== checks.length) process.exitCode = 1
+  const passed = results.filter((r) => r.pass).length
+  console.log(`\n=== ${passed}/${results.length} independent generator checks passed ===`)
+  if (passed !== results.length) process.exitCode = 1
 }
 
 main().catch((error) => {

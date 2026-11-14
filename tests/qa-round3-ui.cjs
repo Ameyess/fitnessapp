@@ -16,7 +16,9 @@ const PASSWORD = "FitStreakE2E!2026"
 const MOCK_CAMERA = `
 (() => {
   const W = 720, H = 960;
-  navigator.mediaDevices.getUserMedia = async () => {
+  window.__fitStreakCameraCalls = [];
+  navigator.mediaDevices.getUserMedia = async (constraints) => {
+    window.__fitStreakCameraCalls.push(JSON.parse(JSON.stringify(constraints || null)));
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
     canvas.style.cssText = 'position:fixed;left:-10000px;top:0;width:' + W + 'px;height:' + H + 'px';
@@ -179,6 +181,8 @@ async function measureLive(browser) {
     const overlay = document.querySelector('[data-testid="show-controls"]')
     const add = document.querySelector('button[aria-label="Add a rep"]')
     const close = document.querySelector('button[aria-label="Close workout"]')
+    const switchCamera = document.querySelector('button[aria-label="Switch camera"]')
+    const toggleSound = document.querySelector('button[aria-label="Toggle sound"]')
     const probe = (el) => {
       if (!el) return null
       const r = el.getBoundingClientRect()
@@ -192,6 +196,8 @@ async function measureLive(browser) {
       overlayPointerEvents: getComputedStyle(overlay).pointerEvents,
       addHitTarget: probe(add),
       closeHitTarget: probe(close),
+      switchCameraHitTarget: probe(switchCamera),
+      toggleSoundHitTarget: probe(toggleSound),
     }
   })
 
@@ -243,11 +249,33 @@ async function measureLive(browser) {
     })
     const count = document.querySelector('[data-testid="rep-count"]')
     const countStyle = count ? getComputedStyle(count) : null
+    const video = document.querySelector("video")
+    const videoStyle = video ? getComputedStyle(video) : null
+    const videoRect = video?.getBoundingClientRect()
+    const intrinsicW = video?.videoWidth || 0
+    const intrinsicH = video?.videoHeight || 0
+    const contentScale = intrinsicW && intrinsicH
+      ? Math.min((videoRect?.width || 0) / intrinsicW, (videoRect?.height || 0) / intrinsicH)
+      : 0
+    const contentBox = videoRect && intrinsicW && intrinsicH ? {
+      left: videoRect.left + (videoRect.width - intrinsicW * contentScale) / 2,
+      right: videoRect.right - (videoRect.width - intrinsicW * contentScale) / 2,
+      top: videoRect.top + (videoRect.height - intrinsicH * contentScale) / 2,
+      bottom: videoRect.bottom - (videoRect.height - intrinsicH * contentScale) / 2,
+    } : null
+    const controlRect = controls.getBoundingClientRect()
     return {
       restoredOpacity: Number(getComputedStyle(controls).opacity),
       restoredPointerEvents: getComputedStyle(controls).pointerEvents,
       skeletonPixels: skeleton,
       markerBox,
+      contentBox,
+      videoObjectFit: videoStyle?.objectFit,
+      intrinsicVideo: { width: intrinsicW, height: intrinsicH },
+      controlsRect: {
+        left: +controlRect.left.toFixed(1), right: +controlRect.right.toFixed(1),
+        top: +controlRect.top.toFixed(1), bottom: +controlRect.bottom.toFixed(1),
+      },
       hits,
       count: count?.textContent?.trim(),
       countColor: countStyle?.color,
@@ -272,6 +300,7 @@ async function measureLive(browser) {
   await page.waitForTimeout(500)
   const afterMinusWait = await readCount()
 
+  const cameraCalls = await page.evaluate(() => window.__fitStreakCameraCalls || [])
   await page.screenshot({
     path: path.join(SHOTS, "qa-live-restored.png"),
     fullPage: false,
@@ -281,6 +310,7 @@ async function measureLive(browser) {
     hideAfterMs,
     hidden,
     shownAndOverlap,
+    cameraCalls,
     manual: { before, afterPlus, afterDetectionWait, afterMinus, afterMinusWait },
   }
 }

@@ -19,6 +19,7 @@ const ROUTES = [
   { path: "/friends", name: "friends", expect: /Friends|Add a friend|No friends/i },
   { path: "/leaderboard", name: "leaderboard", expect: /leaderboard|No friends/i },
   { path: "/settings", name: "settings", expect: /Appearance|Daily reminder|You/i },
+  { path: "/plan", name: "plan", expect: /plan|goal|exercise|custom|target/i },
   { path: "/onboarding", name: "onboarding", expect: /goal|Daily goal|Almost there/i },
   { path: "/exercises/pushups", name: "exercise-setup", expect: /Start workout|phone/i },
 ]

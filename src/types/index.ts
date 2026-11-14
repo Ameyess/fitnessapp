@@ -54,11 +54,30 @@ export interface RepEvent {
   timestamp: number
 }
 
+/**
+ * A user-created exercise in their own plan.
+ *
+ * `trackedExerciseId` links the entry to one of the built-in exercises so
+ * the camera rep tracker can be reused (e.g. "Push-ups (fast)" tracks like
+ * pushups). When it is absent the entry is logged manually.
+ */
+export interface CustomExercise {
+  id: string
+  name: string
+  icon: string
+  type: "rep" | "timed"
+  reps?: number
+  seconds?: number
+  enabled: boolean
+  trackedExerciseId?: ExerciseId
+}
+
 export interface WorkoutLog {
   id: string
   userId: string
   date: string // YYYY-MM-DD in user timezone
-  exerciseId: ExerciseId
+  /** A built-in ExerciseId OR a CustomExercise id. */
+  exerciseId: string
   reps: number
   seconds: number
   goalReps: number
@@ -72,7 +91,7 @@ export interface DailyStats {
   date: string
   userId: string
   exercises: Record<
-    ExerciseId,
+    string,
     { reps: number; seconds: number; goalReps: number; goalSeconds: number; completed: boolean }
   >
   allCompleted: boolean
@@ -88,6 +107,8 @@ export interface UserProfile {
   timezone: string
   locale: string
   goals: Record<ExerciseId, { reps?: number; seconds?: number; enabled: boolean }>
+  /** User-created exercises (their own plan). */
+  customPlan?: CustomExercise[]
   rampEnabled: boolean
   restDays: number[] // 0=Sun .. 6=Sat
   streak: number

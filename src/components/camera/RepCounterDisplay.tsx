@@ -54,9 +54,11 @@ export function RepCounterDisplay({
       style={
         inFrame
           ? {
-              // Dark green background keeps white text at ~6.5:1 contrast
+              // Dark green background keeps white text at ~6.5:1 contrast.
+              // Light mode uses the darker --c-status-text (#2f6b00 on
+              // #d7ffb8 = 5.86:1) because --c-primary-text is only 3.9:1.
               backgroundColor: onDark ? "rgba(47,107,0,0.95)" : "var(--c-primary-soft)",
-              color: onDark ? "#ffffff" : "var(--c-primary-text)",
+              color: onDark ? "#ffffff" : "var(--c-status-text)",
             }
           : {
               // Dark orange background keeps white text at ~6.2:1 contrast

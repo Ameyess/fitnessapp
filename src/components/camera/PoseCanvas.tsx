@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { mapPoint, rotatedSize, type Rotation } from "@/lib/camera/rotation"
 
 type Landmark = { x: number; y: number; z: number; visibility: number }
 
@@ -36,16 +37,18 @@ interface PoseCanvasProps {
   video?: HTMLVideoElement | HTMLImageElement | null
   mirror?: boolean
   highlightJoints?: number[]
-  /** Must match the object-fit of the source element. */
+  /** Must match the object-fit and rotation of the source element. */
   fit?: "cover" | "contain"
+  /** Clockwise rotation applied to the source element. */
+  rotation?: Rotation
 }
 
 /**
  * Draws the skeleton on a canvas layered over the video.
  *
- * MediaPipe returns landmarks normalized to the *video frame*. The <video>
- * uses `object-cover`, so part of the frame is cropped off-screen. This
- * reproduces that crop math so the markers land exactly on the body.
+ * MediaPipe returns landmarks normalized to the *video frame*. This applies
+ * the same rotation, mirror and object-fit geometry as the <video>, so the
+ * markers land exactly on the body even when part of the frame is cropped.
  */
 export function PoseCanvas({
   landmarks,
@@ -53,6 +56,7 @@ export function PoseCanvas({
   mirror = false,
   highlightJoints = [],
   fit = "cover",
+  rotation = 0,
 }: PoseCanvasProps) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
 
@@ -75,34 +79,36 @@ export function PoseCanvas({
     ctx.clearRect(0, 0, cw, ch)
     if (!landmarks || landmarks.length === 0) return
 
-    // --- video -> canvas mapping (must match the <video> CSS object-fit) ---
-    const sw = (video as any)?.videoWidth || (video as any)?.naturalWidth || 0
-    const sh = (video as any)?.videoHeight || (video as any)?.naturalHeight || 0
+    // --- video -> canvas mapping (must match the <video> CSS transform) ---
+    const sourceWidth = (video as any)?.videoWidth || (video as any)?.naturalWidth || 0
+    const sourceHeight = (video as any)?.videoHeight || (video as any)?.naturalHeight || 0
+    const rotatedSource = rotatedSize(rotation, sourceWidth, sourceHeight)
     let scale = 1
-    let rw = cw
-    let rh = ch
-    let ox = 0
-    let oy = 0
-    if (sw > 0 && sh > 0) {
+    let renderedWidth = cw
+    let renderedHeight = ch
+    let offsetX = 0
+    let offsetY = 0
+    if (rotatedSource.width > 0 && rotatedSource.height > 0) {
       if (fit === "contain") {
-        // Letterbox: the whole video is visible, nothing is cropped away.
-        scale = Math.min(cw / sw, ch / sh)
-        rw = sw * scale
-        rh = sh * scale
-        ox = (cw - rw) / 2
-        oy = (ch - rh) / 2
+        // Letterbox: the whole rotated video is visible, nothing is cropped.
+        scale = Math.min(cw / rotatedSource.width, ch / rotatedSource.height)
       } else {
         // object-cover: fill the screen, crop the overflow.
-        scale = Math.max(cw / sw, ch / sh)
-        rw = sw * scale
-        rh = sh * scale
-        ox = (cw - rw) / 2
-        oy = (ch - rh) / 2
+        scale = Math.max(cw / rotatedSource.width, ch / rotatedSource.height)
       }
+      renderedWidth = rotatedSource.width * scale
+      renderedHeight = rotatedSource.height * scale
+      offsetX = (cw - renderedWidth) / 2
+      offsetY = (ch - renderedHeight) / 2
     }
 
-    const px = (lm: Landmark) => (mirror ? (1 - lm.x) * rw + ox : lm.x * rw + ox)
-    const py = (lm: Landmark) => lm.y * rh + oy
+    const mapLandmark = (lm: Landmark) => {
+      const point = mapPoint(lm.x, lm.y, rotation, mirror)
+      return {
+        x: point.x * renderedWidth + offsetX,
+        y: point.y * renderedHeight + offsetY,
+      }
+    }
 
     // --- connections ---
     ctx.lineCap = "round"
@@ -112,9 +118,11 @@ export function PoseCanvas({
       const lmB = landmarks[b]
       if (!lmA || !lmB) continue
       if ((lmA.visibility ?? 0) < 0.4 || (lmB.visibility ?? 0) < 0.4) continue
+      const pointA = mapLandmark(lmA)
+      const pointB = mapLandmark(lmB)
       ctx.beginPath()
-      ctx.moveTo(px(lmA), py(lmA))
-      ctx.lineTo(px(lmB), py(lmB))
+      ctx.moveTo(pointA.x, pointA.y)
+      ctx.lineTo(pointB.x, pointB.y)
       ctx.strokeStyle = "rgba(88, 204, 2, 0.95)"
       ctx.lineWidth = 8
       ctx.stroke()
@@ -127,8 +135,9 @@ export function PoseCanvas({
     landmarks.forEach((lm, i) => {
       if ((lm.visibility ?? 0) < 0.4) return
       const isHot = highlightJoints.includes(i)
-      const x = px(lm)
-      const y = py(lm)
+      const point = mapLandmark(lm)
+      const x = point.x
+      const y = point.y
       const r = isHot ? 9 : 6
 
       ctx.beginPath()
@@ -146,11 +155,12 @@ export function PoseCanvas({
       ctx.lineWidth = 2.5
       ctx.stroke()
     })
-  }, [landmarks, video, mirror, highlightJoints, fit])
+  }, [landmarks, video, mirror, highlightJoints, fit, rotation])
 
   return (
     <canvas
       ref={canvasRef}
+      data-testid="pose-canvas"
       className="pointer-events-none absolute inset-0 h-full w-full"
     />
   )

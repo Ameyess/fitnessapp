@@ -3,13 +3,14 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, BarChart3, Users, Settings } from "lucide-react"
+import { Home, BarChart3, Users, Settings, ClipboardList } from "lucide-react"
 import { useTheme } from "@/components/ui/ThemeProvider"
 import { useProfileStore } from "@/store/profile"
 import { useAuth } from "@/hooks/useAuth"
 
 const TABS = [
   { href: "/", label: "Home", icon: Home },
+  { href: "/plan", label: "Plan", icon: ClipboardList },
   { href: "/history", label: "Stats", icon: BarChart3 },
   { href: "/friends", label: "Friends", icon: Users },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -37,14 +38,14 @@ export default function TopNav() {
       }}
     >
       <div
-        className="mx-auto flex max-w-3xl items-center justify-between gap-1 px-2 safe-area-pad-top sm:gap-2 sm:px-3"
+        className="mx-auto flex max-w-3xl items-center justify-between gap-0 px-1 safe-area-pad-top sm:gap-2 sm:px-3"
         style={{ height: 60 }}
       >
         {/* Brand */}
         <Link
           href="/"
           aria-label="FitStreak home"
-          className="tap-target flex shrink-0 items-center gap-1.5 text-xl font-black tracking-tight"
+          className="tap-target flex h-11 w-11 shrink-0 items-center justify-center gap-1 text-lg font-black tracking-tight xs:h-12 xs:w-auto xs:justify-start xs:px-0.5 sm:gap-1.5 sm:text-xl sm:px-1"
           style={{ color: "var(--c-primary-text)" }}
         >
           <span aria-hidden>💪</span>
@@ -55,7 +56,7 @@ export default function TopNav() {
         <Link
           href="/"
           aria-label={`Current streak: ${streak} day${streak === 1 ? "" : "s"}`}
-          className="tap-target flex shrink-0 items-center gap-1 rounded-full border-2 px-2 font-extrabold transition-transform active:scale-95 sm:px-3"
+          className="tap-target flex h-11 w-11 shrink-0 items-center justify-center gap-0 overflow-hidden rounded-full border-2 px-0 font-extrabold transition-transform active:scale-95 xs:h-12 sm:w-auto sm:gap-1 sm:px-3"
           style={{
             borderColor: "var(--c-flame)",
             backgroundColor: "var(--c-flame-soft)",
@@ -69,7 +70,7 @@ export default function TopNav() {
         </Link>
 
         {/* Nav icons */}
-        <nav className="flex items-center" aria-label="Main">
+        <nav className="flex items-center gap-0 sm:gap-1" aria-label="Main">
           {TABS.map((tab) => {
             const active =
               pathname === tab.href ||
@@ -82,10 +83,15 @@ export default function TopNav() {
                 aria-label={tab.label}
                 aria-current={active ? "page" : undefined}
                 title={tab.label}
-                className="flex h-12 w-12 items-center justify-center rounded-2xl transition-colors active:scale-90"
+                className={`flex h-11 w-11 items-center justify-center rounded-2xl transition-all ${
+                  active
+                    ? "active:translate-y-[3px] active:!shadow-none"
+                    : "active:scale-90"
+                }`}
                 style={{
-                  color: active ? "var(--c-primary-text)" : "var(--c-faint)",
-                  backgroundColor: active ? "var(--c-primary-soft)" : "transparent",
+                  color: active ? "#143300" : "var(--c-faint)",
+                  backgroundColor: active ? "var(--c-primary)" : "transparent",
+                  boxShadow: active ? "0 4px 0 var(--c-primary-dark)" : "none",
                 }}
               >
                 <Icon className="h-6 w-6" strokeWidth={active ? 2.75 : 2.25} />

@@ -17,7 +17,14 @@ import { useProfileStore } from "@/store/profile"
 import { type ExerciseId } from "@/types"
 import { Button } from "@/components/ui/Button"
 import { useToast } from "@/components/ui/Toast"
-import { Pause, Play, RotateCcw, X, Speaker, VolumeX, Camera, Minus, Plus } from "lucide-react"
+import {
+  chooseRotation,
+  nextRotation,
+  pickFit,
+  rotatedSize,
+  type Rotation,
+} from "@/lib/camera/rotation"
+import { Pause, Play, RotateCcw, RotateCw, X, Speaker, VolumeX, Camera, Minus, Plus } from "lucide-react"
 
 const DETECT_FPS = 15
 const FRAME_INTERVAL = 1000 / DETECT_FPS
@@ -58,6 +65,26 @@ export default function LiveWorkoutPage() {
   const [showGuide, setShowGuide] = useState(true)
   const [showControls, setShowControls] = useState(true)
   const [landmarks, setLandmarks] = useState<any[] | null>(null)
+  /** When set, the workout is logged against a custom plan entry instead
+   *  of the built-in exercise (custom entries reuse a built-in tracker). */
+  const [logId, setLogId] = useState<string | null>(null)
+  const [rotation, setRotation] = useState<Rotation>(0)
+  /** True once the user has manually overridden automatic rotation. */
+  const [autoRotation, setAutoRotation] = useState(false)
+  const [streamDimensions, setStreamDimensions] = useState({
+    width: 0,
+    height: 0,
+  })
+  const [viewportSize, setViewportSize] = useState({
+    width: 0,
+    height: 0,
+  })
+
+  useEffect(() => {
+    try {
+      setLogId(new URLSearchParams(window.location.search).get("log"))
+    } catch {}
+  }, [])
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -71,6 +98,76 @@ export default function LiveWorkoutPage() {
   const audioCtxRef = useRef<AudioContext | null>(null)
   const repCounterRef = useRef<ReturnType<typeof createRepCounter> | null>(null)
   const { detector, status: modelStatus, error: modelError } = usePoseTracker()
+
+  // --- viewport and camera orientation ---
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const updateViewportSize = () => {
+      setViewportSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      })
+    }
+
+    updateViewportSize()
+    window.addEventListener("resize", updateViewportSize)
+    window.addEventListener("orientationchange", updateViewportSize)
+    return () => {
+      window.removeEventListener("resize", updateViewportSize)
+      window.removeEventListener("orientationchange", updateViewportSize)
+    }
+  }, [])
+
+  const handleLoadedMetadata = useCallback(() => {
+    const video = videoRef.current
+    if (!video || video.videoWidth <= 0 || video.videoHeight <= 0) return
+
+    setStreamDimensions((current) => {
+      if (
+        current.width === video.videoWidth &&
+        current.height === video.videoHeight
+      ) {
+        return current
+      }
+      return { width: video.videoWidth, height: video.videoHeight }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (autoRotation) return
+    if (
+      streamDimensions.width <= 0 ||
+      streamDimensions.height <= 0 ||
+      viewportSize.width <= 0 ||
+      viewportSize.height <= 0
+    ) {
+      return
+    }
+
+    let upVector: { x: number; y: number } | null = null
+    if (landmarks && landmarks.length > 24) {
+      const leftShoulder = landmarks[11]
+      const rightShoulder = landmarks[12]
+      const leftHip = landmarks[23]
+      const rightHip = landmarks[24]
+      if (leftShoulder && rightShoulder && leftHip && rightHip) {
+        upVector = {
+          x: (leftShoulder.x + rightShoulder.x) / 2 - (leftHip.x + rightHip.x) / 2,
+          y: (leftShoulder.y + rightShoulder.y) / 2 - (leftHip.y + rightHip.y) / 2,
+        }
+      }
+    }
+
+    const next = chooseRotation({
+      streamWidth: streamDimensions.width,
+      streamHeight: streamDimensions.height,
+      viewportWidth: viewportSize.width,
+      viewportHeight: viewportSize.height,
+      upVector,
+    })
+    setRotation((current) => (current === next ? current : next))
+  }, [autoRotation, landmarks, streamDimensions, viewportSize])
 
   // --- exercise setup ---
   useEffect(() => {
@@ -268,7 +365,19 @@ export default function LiveWorkoutPage() {
 
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
-  }, [isActive, isPaused, detector, config, addRep, beep, hapticsOn, setFrame, add])
+  }, [
+    isActive,
+    isPaused,
+    detector,
+    config,
+    addRep,
+    beep,
+    hapticsOn,
+    setFrame,
+    add,
+    setSeconds,
+    syncReps,
+  ])
 
   // --- timer ---
   useEffect(() => {
@@ -321,15 +430,27 @@ export default function LiveWorkoutPage() {
     const p = await getUserProfile(user.uid)
     const tz = p?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
     const date = new Date().toLocaleString("en-US", { timeZone: tz }).split(",")[0]
+    const custom = logId
+      ? (p?.customPlan ?? []).find((c) => c.id === logId)
+      : undefined
     const goal = (p?.goals[id as ExerciseId] ?? {}) as any
-    const targetReps = goal.reps ?? (config.type === "rep" ? 10 : 0)
-    const targetSeconds = goal.seconds ?? (config.type === "timed" ? 30 : 0)
+    const targetReps = custom
+      ? (custom.reps ?? 0)
+      : (goal.reps ?? (config.type === "rep" ? 10 : 0))
+    const targetSeconds = custom
+      ? (custom.seconds ?? 0)
+      : (goal.seconds ?? (config.type === "timed" ? 30 : 0))
     const completed =
-      config.type === "rep" ? reps >= targetReps : seconds >= targetSeconds
+      (custom?.type ?? config.type) === "rep"
+        ? reps >= targetReps
+        : seconds >= targetSeconds
+    // Custom entries are logged under their own id so the plan can track
+    // them separately from the built-in exercise they borrow the tracker from.
+    const exerciseId = logId ?? id
     await saveWorkout({
       userId: user.uid,
       date,
-      exerciseId: id as ExerciseId,
+      exerciseId,
       reps,
       seconds,
       goalReps: targetReps,
@@ -342,19 +463,40 @@ export default function LiveWorkoutPage() {
       await fetch("/api/streak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: user.uid, date, exerciseId: id, completed }),
+        body: JSON.stringify({ uid: user.uid, date, exerciseId, completed }),
       })
     } catch {}
   }
 
   if (!config) return null
 
-  const goal =
-    config.type === "rep"
+  const customEntry = logId
+    ? (profile?.customPlan ?? []).find((c) => c.id === logId)
+    : undefined
+  const goal = customEntry
+    ? customEntry.type === "rep"
+      ? (customEntry.reps ?? 10)
+      : (customEntry.seconds ?? 30)
+    : config.type === "rep"
       ? (profile?.goals[id as ExerciseId]?.reps ?? 10)
       : (profile?.goals[id as ExerciseId]?.seconds ?? config.targetSeconds ?? 30)
 
   const showModelLoading = modelStatus === "loading"
+  const rotatedStream = rotatedSize(
+    rotation,
+    streamDimensions.width,
+    streamDimensions.height
+  )
+  const cameraFit: "cover" | "contain" =
+    rotatedStream.width > 0 &&
+    rotatedStream.height > 0 &&
+    viewportSize.width > 0 &&
+    viewportSize.height > 0
+      ? pickFit(
+          rotatedStream.width / rotatedStream.height,
+          viewportSize.width / viewportSize.height
+        )
+      : "contain"
 
   return (
     <div className="fixed inset-0 z-30 bg-black">
@@ -363,7 +505,9 @@ export default function LiveWorkoutPage() {
         stream={stream}
         videoRef={videoRef}
         mirror={facingMode === "user"}
-        fit="contain"
+        rotation={rotation}
+        fit={cameraFit}
+        onLoadedMetadata={handleLoadedMetadata}
       />
 
       {/* Skeleton overlay - always mounted so the layer never pops in/out */}
@@ -372,7 +516,8 @@ export default function LiveWorkoutPage() {
         video={videoRef.current}
         mirror={facingMode === "user"}
         highlightJoints={config.trackedLandmarks}
-        fit="contain"
+        rotation={rotation}
+        fit={cameraFit}
       />
 
       {/* ---- Overlays ---- */}
@@ -449,7 +594,7 @@ export default function LiveWorkoutPage() {
 
       {/* ---- HUD: top row + bottom controls, centre kept clear for the body ---- */}
       <div className="pointer-events-none absolute inset-0 flex flex-col p-3 safe-area-pad-top safe-area-pad-bottom">
-        <div className="flex items-start justify-between gap-2">
+        <div className="relative z-20 flex items-start justify-between gap-2">
           <button
             onClick={() => router.replace("/")}
             aria-label="Close workout"
@@ -497,6 +642,17 @@ export default function LiveWorkoutPage() {
                 className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/55 backdrop-blur active:scale-90"
               >
                 <RotateCcw className="h-5 w-5 text-white" />
+              </button>
+              <button
+                onClick={() => {
+                  setAutoRotation(true)
+                  setRotation((current) => nextRotation(current))
+                }}
+                aria-label="Rotate camera"
+                data-testid="rotate-camera"
+                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/55 backdrop-blur active:scale-90"
+              >
+                <RotateCw className="h-5 w-5 text-white" />
               </button>
               <button
                 onClick={() => setSoundOn((s) => !s)}
@@ -559,7 +715,7 @@ export default function LiveWorkoutPage() {
                 lastInteractionRef.current = Date.now()
                 setShowControls(true)
               }}
-              className="pointer-events-auto absolute inset-0 cursor-default"
+              className="pointer-events-auto absolute inset-0 z-10 cursor-default"
               animate={{ opacity: showControls ? 0 : 1 }}
               style={{ pointerEvents: showControls ? "none" : "auto" }}
             />
@@ -571,7 +727,7 @@ export default function LiveWorkoutPage() {
               onPointerDown={() => {
                 lastInteractionRef.current = Date.now()
               }}
-              className="pointer-events-auto flex items-center justify-center gap-2"
+              className="pointer-events-auto relative z-20 flex items-center justify-center gap-2"
               style={{ pointerEvents: showControls ? "auto" : "none" }}
             >
               {!inFrame && (

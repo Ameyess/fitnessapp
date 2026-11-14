@@ -6,10 +6,23 @@ import { useAuth } from "@/hooks/useAuth"
 import { useProfileLoader } from "@/hooks/useProfile"
 import { ALL_EXERCISES, type ExerciseId } from "@/types"
 import { getExercise } from "@/lib/exercises"
+import { getCustomTarget, getEnabledCustomExercises } from "@/lib/plan"
 import { ProgressBar, ProgressRing } from "@/components/ui/StreakFlame"
 import { Button } from "@/components/ui/Button"
 import { motion } from "framer-motion"
 import { Play, CheckCircle2, ChevronRight, BarChart3, Trophy } from "lucide-react"
+
+interface TodayGoal {
+  key: string
+  icon: string
+  name: string
+  type: "rep" | "timed"
+  target: number
+  current: number
+  enabled: boolean
+  done: boolean
+  href: string
+}
 
 export default function HomePage() {
   const { user } = useAuth()
@@ -59,21 +72,48 @@ export default function HomePage() {
     )
   }
 
-  const goals = ALL_EXERCISES.map((exId) => {
+  const builtInGoals: TodayGoal[] = ALL_EXERCISES.map((exId) => {
     const ex = getExercise(exId)
-    const goal = profile.goals[exId]
+    const goal = profile.goals?.[exId]
     const enabled = goal?.enabled ?? true
     const target = ex?.type === "rep" ? (goal?.reps ?? 10) : (goal?.seconds ?? 30)
     const w = workouts[exId]
     const current = ex?.type === "rep" ? (w?.reps ?? 0) : (w?.seconds ?? 0)
-    return { exId, ex, enabled, target, current, done: !!w?.completed }
+    return {
+      key: exId,
+      icon: ex?.icon ?? "🏋️",
+      name: ex?.name ?? exId,
+      type: ex?.type ?? "rep",
+      target,
+      current,
+      enabled,
+      done: !!w?.completed,
+      href: `/exercises/${exId}`,
+    }
   })
 
-  const activeGoals = goals.filter((g) => g.enabled)
-  const doneGoals = activeGoals.filter((g) => g.done)
+  const customGoals: TodayGoal[] = getEnabledCustomExercises(profile).map((entry) => {
+    const w = workouts[entry.id]
+    const current = entry.type === "rep" ? (w?.reps ?? 0) : (w?.seconds ?? 0)
+    return {
+      key: entry.id,
+      icon: entry.icon,
+      name: entry.name,
+      type: entry.type,
+      target: getCustomTarget(entry),
+      current,
+      enabled: true,
+      done: !!w?.completed,
+      href: `/exercises/custom/${entry.id}`,
+    }
+  })
+
+  const goals = [...builtInGoals, ...customGoals]
+  const activeGoals = goals.filter((goal) => goal.enabled)
+  const doneGoals = activeGoals.filter((goal) => goal.done)
   const allDone = activeGoals.length > 0 && doneGoals.length === activeGoals.length
   const totalReps = goals.reduce(
-    (sum, g) => sum + (g.ex?.type === "rep" ? g.current : 0),
+    (sum, goal) => sum + (goal.type === "rep" ? goal.current : 0),
     0
   )
 
@@ -147,12 +187,12 @@ export default function HomePage() {
           <div className="space-y-2.5">
             {goals.map((g, i) => (
               <motion.div
-                key={g.exId}
+                key={g.key}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
               >
-                <Link href={`/exercises/${g.exId}`}>
+                <Link href={g.href}>
                   <div
                     className="flex items-center gap-3 rounded-2xl border-2 p-3.5 transition-colors active:scale-[0.99]"
                     style={{
@@ -166,12 +206,12 @@ export default function HomePage() {
                         backgroundColor: g.done ? "var(--c-primary)" : "var(--c-surface-2)",
                       }}
                     >
-                      {g.done ? "✓" : g.ex?.icon}
+                      {g.done ? "✓" : g.icon}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="mb-1.5 flex items-baseline justify-between gap-2">
                         <span className="truncate text-sm font-extrabold" style={{ color: "var(--c-text)" }}>
-                          {g.ex?.name}
+                          {g.name}
                         </span>
                         <span
                           className="shrink-0 text-xs font-extrabold tabular-nums"

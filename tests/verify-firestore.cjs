@@ -52,6 +52,7 @@ function loadEnv() {
     "longestStreak",
     "timezone",
     "goals",
+    "customPlan",
     "createdAt",
   ]
   const missing = required.filter((k) => data[k] === undefined)
@@ -59,7 +60,13 @@ function loadEnv() {
     console.log(`FAIL: missing fields: ${missing.join(", ")}`)
     process.exit(1)
   }
-  console.log("PASS: profile persisted with all required fields")
+  if (!Array.isArray(data.customPlan)) {
+    console.log(`FAIL: customPlan is not an array: ${JSON.stringify(data.customPlan)}`)
+    process.exit(1)
+  }
+  console.log(
+    `PASS: profile persisted with all required fields (customPlan entries: ${data.customPlan.length})`
+  )
 })().catch((e) => {
   console.error("ERROR:", e)
   process.exit(2)

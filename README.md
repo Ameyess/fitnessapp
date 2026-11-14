@@ -8,6 +8,17 @@ Firebase Auth/Firestore/FCM, and Recharts. Video never leaves the device.
 
 - **Rep tracking**: live camera feed with skeleton overlay (canvas), joint-angle
   state machine with hysteresis, "get in frame" guide, manual rep correction.
+- **Vertical camera view**: the preview fills the portrait screen. The stream is
+  requested at the screen's aspect ratio, a horizontal stream is rotated a
+  quarter turn into a vertical view (direction chosen from the pose so the
+  person stays upright), and the skeleton overlay is mapped through the same
+  rotation so the markers stay glued to the body. A rotate button cycles
+  0° / 90° / 180° / 270° manually.
+- **Custom plan**: build your own plan at `/plan` - retarget or switch off the
+  built-in exercises, and add your own exercises (name, icon, rep-count or
+  duration target). A custom exercise can borrow a built-in tracker for camera
+  counting or be logged manually. Custom entries appear in "Today's goals" and
+  count towards the daily streak.
 - **Exercises** (plug-in configs): pushups, situps, crunches, squats, jumping
   jacks, planks (timed hold). Add a new exercise in one new file.
 - **Streaks**: daily goals per exercise, strict streak with rest days, timezone-
@@ -49,6 +60,60 @@ fitness-app/
 ├── tailwind.config.ts
 └── tsconfig.json
 ```
+
+## Custom plan (user-defined exercises)
+
+`/plan` is the plan builder. It stores two things on the user profile:
+
+- `goals` - the six built-in exercises with `reps` / `seconds` and an `enabled`
+  flag.
+- `customPlan` - an array of `CustomExercise`:
+
+```ts
+interface CustomExercise {
+  id: string
+  name: string
+  icon: string
+  type: "rep" | "timed"
+  reps?: number
+  seconds?: number
+  enabled: boolean
+  /** Optional built-in exercise whose camera tracker is reused. */
+  trackedExerciseId?: ExerciseId
+}
+```
+
+A custom entry with `trackedExerciseId` opens the matching camera tracker with
+`?log=<customId>`, so the reps are counted by MediaPipe but stored against the
+custom entry (with the custom target). An entry without one is logged by hand
+on `/exercises/custom/<id>`. Both write a `WorkoutLog` whose `exerciseId` is the
+custom id, and `/api/streak` counts every enabled built-in **and** custom entry
+when deciding whether the day is complete.
+
+## Camera rotation (the vertical view)
+
+The maths lives in `src/lib/camera/rotation.ts` and is deliberately pure so it
+can be unit tested:
+
+- `rotatedSize(rotation, sw, sh)` - the frame size after a quarter turn.
+- `mapPoint(u, v, rotation, mirror)` - source-normalised point to
+  rotated-frame-normalised point. The mirror is applied **first**, in source
+  space, which is exactly what the CSS `transform: rotate(Rdeg) scaleX(-1)`
+  does (CSS applies the right-most function first).
+- `pickFit(rotatedAspect, viewportAspect)` - `cover` when the aspects are
+  within 25% of each other (the preview fills the screen), `contain` otherwise
+  so a badly mismatched stream is letterboxed instead of cropping the user out.
+- `chooseRotation(...)` - never rotates a portrait stream on a portrait screen;
+  when the orientations disagree it turns a quarter and uses the pose
+  up-vector (shoulder minus hip) to pick the direction that leaves the person
+  upright.
+- `nextRotation(rotation)` - cycles 0 / 90 / 180 / 270 for the rotate button.
+
+`CameraView` renders the video inside a frame whose axes are swapped for a
+quarter turn and rotates the video with CSS; `PoseCanvas` fits the *rotated*
+source into the canvas with the same object-fit maths. Both therefore agree on
+the rendered rectangle, scale and offsets, so the markers stay on the body at
+any rotation.
 
 ## Exercise config example (plug-in style)
 
@@ -184,9 +249,11 @@ appears automatically.
 - `npm run lint` — ESLint
 - `npm run typecheck` — TypeScript check (`tsc --noEmit`)
 - `npm run test:unit` — rep-counting state-machine unit tests (no browser needed)
+- `npm run test:rotation` — camera rotation/fit maths unit tests (no browser needed)
 - `npm run test:e2e` — Playwright: camera pipeline, login latency, theme
 - `npm run test:pages` — Playwright: every route, overflow, touch targets, narrow header
-- `npm test` — all three suites (the e2e suites expect the dev server on :3000)
+- `npm run test:features` — Playwright: vertical camera view + custom plan builder
+- `npm test` — all suites (the browser suites expect the dev server on :3000)
 
 ### Testing notes
 
@@ -198,7 +265,8 @@ Pose Landmarker over a still photo and renders the real `<PoseCanvas>` overlay.
 
 The unit test bundles the real `src/lib/exercises/repCounter.ts` with esbuild
 and drives it with synthetic landmarks, so it tests the shipped logic rather
-than a copy.
+than a copy. `tests/rotation.test.cjs` does the same for
+`src/lib/camera/rotation.ts`.
 
 ## 8. Design system
 
