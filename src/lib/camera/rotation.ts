@@ -112,20 +112,17 @@ export function chooseRotation(params: {
     return { x: tip.x - origin.x, y: tip.y - origin.y }
   }
 
-  // The person is already upright in the source frame. Turning the frame a
-  // quarter would turn THEM sideways, so keep the frame as it is - the
-  // preview is letterboxed instead, and the user can still tap rotate.
-  if (isUpright({ x: upVector.x, y: upVector.y })) return 0
-
-  // The person lies sideways in the source frame (the usual sign that the
-  // device handed back a raw landscape buffer): pick the quarter turn that
-  // brings them back upright.
+  // The pose can choose which quarter turn to use, but it can never turn a
+  // matching orientation back into 0 (or a mismatched orientation into 0).
+  // Evaluate both candidates against the source-space up-vector and use the
+  // one that leaves the person upright.
   const candidates: Rotation[] = [90, 270]
   const upright = candidates.filter((r) => isUpright(rotatedVector(r)))
   if (upright.length === 1) return upright[0]
 
   // Ambiguous (no clear upright candidate - e.g. the user is lying on the
-  // floor): fall back to the orientation-based default.
+  // floor or is already upright in the source frame): fall back to the
+  // orientation-based default. The preview must still remain vertical.
   return aspectDefault
 }
 

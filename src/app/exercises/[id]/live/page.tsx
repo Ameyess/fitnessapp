@@ -97,6 +97,8 @@ export default function LiveWorkoutPage() {
   const lastInteractionRef = useRef(Date.now())
   const audioCtxRef = useRef<AudioContext | null>(null)
   const repCounterRef = useRef<ReturnType<typeof createRepCounter> | null>(null)
+  /** The automatic mode is locked once the stream and viewport are known. */
+  const autoRotationModeRef = useRef<"none" | "quarter" | null>(null)
   const { detector, status: modelStatus, error: modelError } = usePoseTracker()
 
   // --- viewport and camera orientation ---
@@ -134,6 +136,9 @@ export default function LiveWorkoutPage() {
     })
   }, [])
 
+  // Decide the automatic rotation MODE once the stream and viewport are
+  // known. A later pose update may refine a quarter turn's direction, but it
+  // must never switch the mode between 0 and a quarter turn.
   useEffect(() => {
     if (autoRotation) return
     if (
@@ -145,20 +150,36 @@ export default function LiveWorkoutPage() {
       return
     }
 
-    let upVector: { x: number; y: number } | null = null
-    if (landmarks && landmarks.length > 24) {
-      const leftShoulder = landmarks[11]
-      const rightShoulder = landmarks[12]
-      const leftHip = landmarks[23]
-      const rightHip = landmarks[24]
-      if (leftShoulder && rightShoulder && leftHip && rightHip) {
-        upVector = {
-          x: (leftShoulder.x + rightShoulder.x) / 2 - (leftHip.x + rightHip.x) / 2,
-          y: (leftShoulder.y + rightShoulder.y) / 2 - (leftHip.y + rightHip.y) / 2,
-        }
-      }
+    if (autoRotationModeRef.current === null) {
+      const next = chooseRotation({
+        streamWidth: streamDimensions.width,
+        streamHeight: streamDimensions.height,
+        viewportWidth: viewportSize.width,
+        viewportHeight: viewportSize.height,
+      })
+      autoRotationModeRef.current = next === 0 ? "none" : "quarter"
+      setRotation(next)
     }
+  }, [autoRotation, streamDimensions, viewportSize])
 
+  // Pose landmarks can choose which quarter turn keeps the person upright.
+  // They can never change the locked mode back to 0.
+  useEffect(() => {
+    if (autoRotation || autoRotationModeRef.current !== "quarter") return
+    if (!landmarks || landmarks.length <= 24) return
+
+    const leftShoulder = landmarks[11]
+    const rightShoulder = landmarks[12]
+    const leftHip = landmarks[23]
+    const rightHip = landmarks[24]
+    if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) return
+
+    // MediaPipe landmarks use normalized source coordinates with y pointing
+    // down. The vector points from the hip midpoint to the shoulder midpoint.
+    const upVector = {
+      x: (leftShoulder.x + rightShoulder.x) / 2 - (leftHip.x + rightHip.x) / 2,
+      y: (leftShoulder.y + rightShoulder.y) / 2 - (leftHip.y + rightHip.y) / 2,
+    }
     const next = chooseRotation({
       streamWidth: streamDimensions.width,
       streamHeight: streamDimensions.height,
@@ -166,6 +187,7 @@ export default function LiveWorkoutPage() {
       viewportHeight: viewportSize.height,
       upVector,
     })
+    if (next !== 90 && next !== 270) return
     setRotation((current) => (current === next ? current : next))
   }, [autoRotation, landmarks, streamDimensions, viewportSize])
 
@@ -459,13 +481,38 @@ export default function LiveWorkoutPage() {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    try {
-      await fetch("/api/streak", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: user.uid, date, exerciseId, completed }),
-      })
-    } catch {}
+    // The workout is already saved, so a streak failure must never block
+    // the result screen. The route recomputes the streak from the saved
+    // workouts, so a retry syncs it.
+    const streakBody = JSON.stringify({ uid: user.uid, date, exerciseId, completed })
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch("/api/streak", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: streakBody,
+        })
+        if (res.ok) {
+          const result = (await res.json()) as any
+          const state = useProfileStore.getState()
+          if (state.profile && typeof result?.streak === "number") {
+            state.patchProfile({
+              streak: result.streak,
+              longestStreak: result.longest ?? result.longestStreak ?? state.profile.longestStreak,
+            })
+          }
+          return
+        }
+      } catch {}
+      if (attempt === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 600))
+      }
+    }
+    add({
+      type: "info",
+      title: "Workout saved",
+      description: "Your streak will sync the next time you log a workout.",
+    })
   }
 
   if (!config) return null

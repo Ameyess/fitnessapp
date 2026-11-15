@@ -81,8 +81,12 @@ export default function CustomExercisePage() {
 
     setSaving(true)
     setSaveError(null)
+
+    // 1. Persist the workout. This is the source of truth - if it fails,
+    //    nothing was logged at all.
+    let saved: any
     try {
-      const saved = await saveWorkout({
+      saved = await saveWorkout({
         userId: user.uid,
         date,
         exerciseId: entry.id,
@@ -94,7 +98,19 @@ export default function CustomExercisePage() {
         createdAt: now,
         updatedAt: now,
       })
+    } catch (err: any) {
+      const message = err?.message ?? "Could not log this workout. Please try again."
+      setSaveError(message)
+      add({ type: "error", title: "Workout not saved", description: message })
+      setSaving(false)
+      return
+    }
 
+    // 2. Update the streak. The workout IS saved, so a failure here must
+    //    NOT claim the opposite - it would hide a log the user can see.
+    let result: StreakResponse | null = null
+    let streakError: string | null = null
+    try {
       const response = await fetch("/api/streak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -105,30 +121,42 @@ export default function CustomExercisePage() {
           completed,
         }),
       })
-      if (!response.ok) throw new Error("Could not update your streak.")
-      const result = (await response.json()) as StreakResponse
-
-      const state = useProfileStore.getState()
-      const nextWorkouts = { ...state.workouts, [entry.id]: saved }
-      const nextProfile = state.profile
-        ? {
-            ...state.profile,
-            streak: result.streak ?? state.profile.streak,
-            longestStreak:
-              result.longestStreak ?? result.longest ?? state.profile.longestStreak,
-          }
-        : null
-      state.setWorkouts(nextWorkouts)
-      if (nextProfile) {
-        state.patchProfile({
-          streak: nextProfile.streak,
-          longestStreak: nextProfile.longestStreak,
-        })
-        writeCache(user.uid, { profile: nextProfile, workouts: nextWorkouts })
+      if (!response.ok) {
+        throw new Error(`the server returned HTTP ${response.status}`)
       }
+      result = (await response.json()) as StreakResponse
+    } catch (err: any) {
+      streakError = err?.message ?? "the streak service did not respond"
+    }
 
-      setSaved(true)
-      setSavedCompleted(completed)
+    const state = useProfileStore.getState()
+    const nextWorkouts = { ...state.workouts, [entry.id]: saved }
+    const nextProfile = state.profile
+      ? {
+          ...state.profile,
+          streak: result?.streak ?? state.profile.streak,
+          longestStreak:
+            result?.longestStreak ??
+            result?.longest ??
+            state.profile.longestStreak,
+        }
+      : null
+    state.setWorkouts(nextWorkouts)
+    if (nextProfile) {
+      state.patchProfile({
+        streak: nextProfile.streak,
+        longestStreak: nextProfile.longestStreak,
+      })
+      writeCache(user.uid, { profile: nextProfile, workouts: nextWorkouts })
+    }
+
+    setSaved(true)
+    setSavedCompleted(completed)
+    if (streakError) {
+      const message = `Workout logged, but your streak could not be updated (${streakError}). It will sync the next time you log a workout.`
+      setSaveError(message)
+      add({ type: "info", title: "Workout logged", description: message })
+    } else {
       add({
         type: "success",
         title: completed ? "Goal complete!" : "Workout logged",
@@ -136,13 +164,8 @@ export default function CustomExercisePage() {
           ? "Your daily progress is up to date."
           : "Keep going to reach today's target.",
       })
-    } catch (err: any) {
-      const message = err?.message ?? "Could not log this workout. Please try again."
-      setSaveError(message)
-      add({ type: "error", title: "Workout not saved", description: message })
-    } finally {
-      setSaving(false)
     }
+    setSaving(false)
   }
 
   if (loading) {

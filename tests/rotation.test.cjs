@@ -172,6 +172,20 @@ async function main() {
     })
     check("a portrait stream on a portrait screen is not rotated", r1 === 0, String(r1))
 
+    // Landscape stream on a landscape screen: never rotate either.
+    const rLandscape = chooseRotation({
+      streamWidth: 1280,
+      streamHeight: 720,
+      viewportWidth: 896,
+      viewportHeight: 414,
+      upVector: null,
+    })
+    check(
+      "a landscape stream on a landscape screen is not rotated",
+      rLandscape === 0,
+      String(rLandscape)
+    )
+
     // Landscape stream on a portrait screen: rotate to a vertical view.
     const r2 = chooseRotation({
       streamWidth: 1280,
@@ -186,7 +200,8 @@ async function main() {
       String(r2)
     )
 
-    // The person is already upright in the source frame -> keep it upright.
+    // Even when the person is already upright in the source frame, an
+    // orientation mismatch must still produce a quarter turn.
     const r3 = chooseRotation({
       streamWidth: 1280,
       streamHeight: 720,
@@ -195,8 +210,8 @@ async function main() {
       upVector: { x: 0, y: -0.3 }, // shoulder above hip
     })
     check(
-      "an upright pose is not rotated",
-      r3 === 0,
+      "an upright pose in a mismatched stream is still rotated",
+      r3 === 90 || r3 === 270,
       String(r3)
     )
 
@@ -218,6 +233,23 @@ async function main() {
       "a sideways pose is rotated so the person ends up upright",
       (r4 === 90 || r4 === 270) && dy < 0 && Math.abs(dy) >= Math.abs(dx),
       `rotation=${r4} up=(${dx.toFixed(3)}, ${dy.toFixed(3)})`
+    )
+
+    // The same inputs must always produce the same result.
+    const deterministicParams = {
+      streamWidth: 1280,
+      streamHeight: 720,
+      viewportWidth: 414,
+      viewportHeight: 896,
+      upVector: { x: 0.3, y: 0 },
+    }
+    const deterministicResults = Array.from({ length: 5 }, () =>
+      chooseRotation(deterministicParams)
+    )
+    check(
+      "chooseRotation is deterministic",
+      deterministicResults.every((result) => result === deterministicResults[0]),
+      JSON.stringify(deterministicResults)
     )
   }
 

@@ -94,6 +94,35 @@ const camInfo = (page) =>
     }
   })
 
+// Wait until the tracker has actually rendered a pose. The canvas is always
+// mounted, so a green marker is the observable proof that detection has run.
+const waitForPoseDetection = async (page) => {
+  await page.waitForFunction(
+    () => {
+      const canvas = document.querySelector("canvas[data-testid='pose-canvas']")
+      if (!canvas || canvas.width === 0 || canvas.height === 0) return false
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return false
+      try {
+        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+        for (let i = 0; i < pixels.length; i += 4) {
+          if (
+            pixels[i + 3] > 40 &&
+            pixels[i + 1] > 140 &&
+            pixels[i] < 160 &&
+            pixels[i + 2] < 110 &&
+            pixels[i + 1] > pixels[i] + 40
+          ) {
+            return true
+          }
+        }
+      } catch {}
+      return false
+    },
+    { timeout: 30000 }
+  )
+}
+
 async function main() {
   fs.mkdirSync(SHOTS, { recursive: true })
   const browser = await chromium.launch({
@@ -230,26 +259,22 @@ async function main() {
     })
     await waitForVideo(page)
 
-    let rotated = "0"
-    try {
-      await page.waitForFunction(
-        () => {
-          const v = document.querySelector("video")
-          const r = v && v.getAttribute("data-rotation")
-          return r === "90" || r === "270"
-        },
-        { timeout: 12000 }
-      )
-    } catch {}
+    // Start the tracker before checking the final orientation. A transient
+    // quarter turn that later falls back to 0 must not pass this check.
+    const startBtn = page.getByRole("button", { name: /start counting/i })
+    await startBtn.waitFor({ state: "visible", timeout: 20000 })
+    await startBtn.first().click()
+    await waitForPoseDetection(page)
+    await page.waitForTimeout(2500)
+
     const info = await camInfo(page)
-    rotated = info.rotation
     record(
-      "a horizontal stream on a portrait screen is rotated into a vertical view",
-      rotated === "90" || rotated === "270",
-      `rotation=${rotated} stream=${info.videoWidth}x${info.videoHeight}`
+      "a horizontal stream stays rotated after pose detection starts",
+      info.rotation === "90" || info.rotation === "270",
+      `rotation=${info.rotation} stream=${info.videoWidth}x${info.videoHeight}`
     )
     record(
-      "the rotated preview fills the portrait screen",
+      "the rotated preview fills the portrait screen after pose detection",
       info.objectFit === "cover",
       `object-fit=${info.objectFit}`
     )
