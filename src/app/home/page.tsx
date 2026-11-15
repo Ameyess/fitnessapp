@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useAuth } from "@/hooks/useAuth"
 import { useProfileLoader } from "@/hooks/useProfile"
+import SignInView from "@/components/auth/SignInView"
 import { ALL_EXERCISES, type ExerciseId } from "@/types"
 import { getExercise } from "@/lib/exercises"
 import { getCustomTarget, getEnabledCustomExercises } from "@/lib/plan"
@@ -25,8 +26,17 @@ interface TodayGoal {
 }
 
 export default function HomePage() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const { profile, workouts, loading, error } = useProfileLoader()
+
+  // This component is also mounted directly at /home (the route the PWA
+  // notification service worker opens), so it has to gate on auth itself -
+  // otherwise a signed-out visitor gets the onboarding card instead of the
+  // sign-in form. On "/" the AppShell already does this, so this branch is
+  // only reached on the standalone route.
+  if (!authLoading && !user) {
+    return <SignInView inline />
+  }
 
   if (loading) {
     return (

@@ -15,6 +15,7 @@ const PASSWORD = "FitStreakE2E!2026"
 
 const ROUTES = [
   { path: "/", name: "home", expect: /Today's goals|Start your streak/i },
+  { path: "/home", name: "home-duplicate", expect: /Today's goals|Start your streak/i },
   { path: "/history", name: "history", expect: /Stats|Reps per day|No data/i },
   { path: "/friends", name: "friends", expect: /Friends|Add a friend|No friends/i },
   { path: "/leaderboard", name: "leaderboard", expect: /leaderboard|No friends/i },
@@ -50,7 +51,7 @@ function record(name, pass, detail) {
       hasTouch: true,
     })
     const ap = await anon.newPage()
-    for (const p of ["/", "/sign-in"]) {
+    for (const p of ["/", "/sign-in", "/home"]) {
       const t0 = Date.now()
       await ap.goto(`${BASE}${p}`, { waitUntil: "domcontentloaded" })
       await ap.waitForSelector('input[type="email"]', { timeout: 20000 })

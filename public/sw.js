@@ -27,7 +27,9 @@ onBackgroundMessage(messaging, (payload) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close()
-  event.waitUntil(clients.openWindow("/home"))
+  // "/" is the canonical, auth-gated home route. "/home" is a duplicate
+  // route kept for backwards compatibility.
+  event.waitUntil(clients.openWindow("/"))
 })
 
 // Basic PWA cache for installability
